@@ -99,6 +99,9 @@ export interface Transaction {
   transferId: string | null;
   counterAccountId: string | null;
   creditCardInvoiceId: string | null;
+  installmentPlanId?: string | null;
+  installmentNumber?: number | null;
+  recurringTransactionId?: string | null;
   updatedAt: string;
   deletedAt: string | null;
   category?: Pick<Category, 'id' | 'name' | 'color' | 'icon' | 'nature' | 'kind'> | null;
@@ -133,6 +136,136 @@ export interface DashboardSummary {
 
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown };
+}
+
+// ---- Orçamentos ----
+export interface Budget {
+  id: string;
+  clientId: string | null;
+  workspaceId: string;
+  categoryId: string | null;
+  month: string;
+  amount: Money;
+  rollover: boolean;
+  createdAt: string;
+  updatedAt: string;
+  category?: Pick<Category, 'id' | 'name' | 'color' | 'icon'> | null;
+}
+
+/** Orçamento + consumo do mês (resposta do GET /budgets). */
+export interface BudgetView extends Budget {
+  spent: Money;
+  remaining: Money;
+  progress: number; // 0..1+ (gasto / orçado)
+}
+
+// ---- Recorrências ----
+export type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+
+export interface RecurringTransaction {
+  id: string;
+  clientId: string | null;
+  workspaceId: string;
+  accountId: string;
+  type: 'INCOME' | 'EXPENSE';
+  amount: Money;
+  description: string;
+  categoryId: string | null;
+  frequency: RecurrenceFrequency;
+  interval: number;
+  anchorDay: number | null;
+  startDate: string;
+  endDate: string | null;
+  materializedUntil: string | null;
+  isActive: boolean;
+  autoConfirm: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  category?: Pick<Category, 'id' | 'name' | 'color' | 'icon'> | null;
+}
+
+// ---- Parcelamentos ----
+export interface InstallmentPlan {
+  id: string;
+  clientId: string | null;
+  workspaceId: string;
+  description: string;
+  totalAmount: Money;
+  installments: number;
+  firstDueDate: string;
+  categoryId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  _count?: { transactions: number };
+  transactions?: Transaction[];
+}
+
+// ---- Faturas de cartão ----
+export type InvoiceStatus = 'OPEN' | 'CLOSED' | 'PAID' | 'OVERDUE';
+
+export interface CreditCardInvoice {
+  id: string;
+  workspaceId: string;
+  accountId: string;
+  closingDate: string;
+  dueDate: string;
+  status: InvoiceStatus;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  total: Money;
+  account?: { id: string; name: string; paymentAccountId: string | null };
+  transactions?: Transaction[];
+}
+
+// ---- Investimentos ----
+export type InvestmentClass = 'STOCK' | 'FII' | 'ETF' | 'FUND' | 'FIXED_INCOME' | 'CRYPTO' | 'OTHER';
+export type InvestmentTxKind =
+  | 'BUY'
+  | 'SELL'
+  | 'DIVIDEND'
+  | 'INTEREST'
+  | 'CONTRIBUTION'
+  | 'WITHDRAWAL';
+
+export interface InvestmentPosition {
+  quantity: Money;
+  avgPrice: Money;
+  invested: Money;
+  income: Money;
+  marketValue: Money | null;
+}
+
+export interface InvestmentAsset {
+  id: string;
+  workspaceId: string;
+  symbol: string | null;
+  name: string;
+  class: InvestmentClass;
+  currency: string;
+  lastPrice: Money | null;
+  lastPriceAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  position?: InvestmentPosition;
+  transactions?: InvestmentTransaction[];
+}
+
+export interface InvestmentTransaction {
+  id: string;
+  clientId: string | null;
+  accountId: string;
+  assetId: string;
+  kind: InvestmentTxKind;
+  quantity: Money;
+  unitPrice: Money;
+  fees: Money;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 }
 
 // ---- Importação por LLM ----

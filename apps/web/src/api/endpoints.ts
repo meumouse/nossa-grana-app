@@ -2,11 +2,22 @@ import { api, wsPath } from './client';
 import type {
   Account,
   AuthResponse,
+  Budget,
+  BudgetView,
   Category,
+  CreditCardInvoice,
   DashboardSummary,
   Forecast,
   ImportBatch,
   ImportItem,
+  InstallmentPlan,
+  InvestmentAsset,
+  InvestmentPosition,
+  InvestmentTransaction,
+  InvestmentTxKind,
+  InvoiceStatus,
+  RecurrenceFrequency,
+  RecurringTransaction,
   Transaction,
   User,
   Workspace,
@@ -112,6 +123,121 @@ export const importApi = {
       defaultAccountId,
     }),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/imports/${id}`)),
+};
+
+// ---- Orçamentos (online) ----
+export interface BudgetUpsert {
+  categoryId?: string | null;
+  month: string; // YYYY-MM-DD (dia 1 do mês)
+  amount: number;
+  rollover?: boolean;
+}
+
+export const budgetApi = {
+  list: (ws: string, month: string) =>
+    api.get<{ month: string; budgets: BudgetView[] }>(
+      wsPath(ws, `/budgets?month=${encodeURIComponent(month)}`),
+    ),
+  upsert: (ws: string, body: BudgetUpsert) =>
+    api.post<{ budget: Budget }>(wsPath(ws, '/budgets'), body),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/budgets/${id}`)),
+};
+
+// ---- Recorrências (online) ----
+export interface RecurringInput {
+  accountId: string;
+  type: 'INCOME' | 'EXPENSE';
+  amount: number;
+  description: string;
+  categoryId?: string | null;
+  frequency: RecurrenceFrequency;
+  interval?: number;
+  anchorDay?: number | null;
+  startDate: string;
+  endDate?: string | null;
+  autoConfirm?: boolean;
+}
+
+export const recurringApi = {
+  list: (ws: string) =>
+    api.get<{ items: RecurringTransaction[] }>(wsPath(ws, '/recurring')),
+  create: (ws: string, body: RecurringInput) =>
+    api.post<{ recurring: RecurringTransaction }>(wsPath(ws, '/recurring'), body),
+  update: (ws: string, id: string, body: Partial<RecurringInput> & { isActive?: boolean }) =>
+    api.patch<{ recurring: RecurringTransaction }>(wsPath(ws, `/recurring/${id}`), body),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/recurring/${id}`)),
+};
+
+// ---- Parcelamentos (online) ----
+export interface InstallmentInput {
+  accountId: string;
+  description: string;
+  totalAmount: number;
+  installments: number;
+  firstDueDate: string;
+  categoryId?: string | null;
+}
+
+export const installmentApi = {
+  list: (ws: string) => api.get<{ items: InstallmentPlan[] }>(wsPath(ws, '/installments')),
+  get: (ws: string, id: string) =>
+    api.get<{ plan: InstallmentPlan }>(wsPath(ws, `/installments/${id}`)),
+  create: (ws: string, body: InstallmentInput) =>
+    api.post<{ plan: InstallmentPlan }>(wsPath(ws, '/installments'), body),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/installments/${id}`)),
+};
+
+// ---- Faturas de cartão (online) ----
+export const invoiceApi = {
+  list: (ws: string, params: { accountId?: string; status?: InvoiceStatus } = {}) => {
+    const q = new URLSearchParams();
+    if (params.accountId) q.set('accountId', params.accountId);
+    if (params.status) q.set('status', params.status);
+    const qs = q.toString();
+    return api.get<{ invoices: CreditCardInvoice[] }>(
+      wsPath(ws, `/invoices${qs ? `?${qs}` : ''}`),
+    );
+  },
+  get: (ws: string, id: string) =>
+    api.get<{ invoice: CreditCardInvoice }>(wsPath(ws, `/invoices/${id}`)),
+  pay: (ws: string, id: string, body: { paymentAccountId?: string; paidAt?: string } = {}) =>
+    api.post<{ invoice: CreditCardInvoice }>(wsPath(ws, `/invoices/${id}/pay`), body),
+};
+
+// ---- Investimentos (online) ----
+export interface AssetInput {
+  symbol?: string | null;
+  name: string;
+  class: InvestmentAsset['class'];
+  currency?: string;
+  lastPrice?: number | null;
+}
+
+export interface InvestmentTxInput {
+  accountId: string;
+  assetId: string;
+  kind: InvestmentTxKind;
+  quantity: number;
+  unitPrice: number;
+  fees?: number;
+  date: string;
+}
+
+export const investmentApi = {
+  listAssets: (ws: string) =>
+    api.get<{ assets: InvestmentAsset[] }>(wsPath(ws, '/investments/assets')),
+  getAsset: (ws: string, id: string) =>
+    api.get<{ asset: InvestmentAsset; position: InvestmentPosition }>(
+      wsPath(ws, `/investments/assets/${id}`),
+    ),
+  createAsset: (ws: string, body: AssetInput) =>
+    api.post<{ asset: InvestmentAsset }>(wsPath(ws, '/investments/assets'), body),
+  updateAsset: (ws: string, id: string, body: Partial<AssetInput>) =>
+    api.patch<{ asset: InvestmentAsset }>(wsPath(ws, `/investments/assets/${id}`), body),
+  createTx: (ws: string, body: InvestmentTxInput) =>
+    api.post<{ transaction: InvestmentTransaction }>(wsPath(ws, '/investments/transactions'), body),
+  removeTx: (ws: string, id: string) =>
+    api.del<void>(wsPath(ws, `/investments/transactions/${id}`)),
 };
 
 export const syncApi = {
