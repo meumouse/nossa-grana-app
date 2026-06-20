@@ -5,6 +5,7 @@ node_modules/
 
 # build
 dist/
+dev-dist/
 build/
 *.tsbuildinfo
 
@@ -12,10 +13,6 @@ build/
 .env
 .env.*
 !.env.example
-
-# prisma
-prisma/*.db
-prisma/migrations/dev.db*
 
 # logs
 logs/
@@ -32,3 +29,6 @@ Thumbs.db
 # coverage / cache
 coverage/
 .cache/
+
+# others
+.claude
