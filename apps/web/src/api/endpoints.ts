@@ -5,6 +5,8 @@ import type {
   Category,
   DashboardSummary,
   Forecast,
+  ImportBatch,
+  ImportItem,
   Transaction,
   User,
   Workspace,
@@ -82,6 +84,35 @@ export interface PushResponse {
   idMap: Array<{ clientId: string; id: string }>;
   serverTime: string;
 }
+
+// ---- Importação por LLM (extratos, comprovantes, CSV/OFX) ----
+export interface ImportItemPatch {
+  date?: string;
+  description?: string;
+  amount?: number;
+  type?: 'INCOME' | 'EXPENSE';
+  categoryId?: string | null;
+  accountId?: string | null;
+  status?: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+}
+
+export const importApi = {
+  upload: (ws: string, file: File, accountId?: string) => {
+    const form = new FormData();
+    form.append('file', file);
+    const qs = accountId ? `?accountId=${encodeURIComponent(accountId)}` : '';
+    return api.postForm<{ batch: ImportBatch }>(wsPath(ws, `/imports${qs}`), form);
+  },
+  list: (ws: string) => api.get<{ items: ImportBatch[] }>(wsPath(ws, '/imports')),
+  get: (ws: string, id: string) => api.get<{ batch: ImportBatch }>(wsPath(ws, `/imports/${id}`)),
+  patchItem: (ws: string, id: string, itemId: string, body: ImportItemPatch) =>
+    api.patch<{ item: ImportItem }>(wsPath(ws, `/imports/${id}/items/${itemId}`), body),
+  confirm: (ws: string, id: string, defaultAccountId?: string) =>
+    api.post<{ batch: ImportBatch; imported: number }>(wsPath(ws, `/imports/${id}/confirm`), {
+      defaultAccountId,
+    }),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/imports/${id}`)),
+};
 
 export const syncApi = {
   pull: (ws: string, since?: string) => {

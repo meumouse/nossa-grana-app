@@ -126,6 +126,7 @@ model Workspace {
   creditCardInvoices   CreditCardInvoice[]
   investmentAssets     InvestmentAsset[]
   activities           ActivityLog[]
+  importBatches        ImportBatch[]
 }
 
 enum WorkspaceType {
@@ -657,4 +658,88 @@ model ActivityLog {
   createdAt   DateTime  @default(now())
 
   @@index([workspaceId, createdAt])
+}
+
+// ============================================================================
+//  10. IMPORTAÇÃO POR LLM (extratos, comprovantes, CSV/OFX)
+//      Um documento sobe -> a IA (ou parser) extrai linhas -> usuário revisa e
+//      confirma -> só então viram Transactions reais. Nada entra no saldo sem
+//      confirmação humana. O lote fica persistido p/ auditoria e re-revisão.
+// ============================================================================
+
+model ImportBatch {
+  id          String    @id @default(cuid())
+  clientId    String?   @unique // idempotência offline (futuro)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdById String?
+  source      ImportSource
+  status      ImportStatus @default(PROCESSING)
+
+  filename String?
+  mimeType String?
+  model    String? // modelo/provider usado na extração (ex.: "openai:gpt-4o")
+
+  // saída crua da extração (resposta do LLM / parser) p/ depuração e auditoria
+  rawExtraction Json?
+  error         String? // mensagem caso a extração falhe
+
+  items ImportItem[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+}
+
+model ImportItem {
+  id      String      @id @default(cuid())
+  batchId String
+  batch   ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  // dados extraídos (editáveis na revisão)
+  date        DateTime
+  description String
+  amount      Decimal         @db.Decimal(18, 2) // sempre > 0; sinal vem do type
+  type        TransactionType // INCOME | EXPENSE (TRANSFER não é importado aqui)
+
+  // sugestão da IA (nome cru) + resolução para entidades do workspace
+  suggestedCategory String?
+  categoryId        String?
+  accountId         String?
+
+  status        ImportItemStatus @default(PENDING)
+  transactionId String? // Transaction criada ao confirmar (link)
+  confidence    Float?
+  raw           Json? // linha original/contexto
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId])
+}
+
+enum ImportSource {
+  PDF
+  IMAGE
+  CSV
+  OFX
+}
+
+enum ImportStatus {
+  PROCESSING     // extração em andamento
+  PENDING_REVIEW // extraído, aguardando revisão do usuário
+  CONFIRMED      // itens aceitos viraram transações
+  CANCELED
+  FAILED
+}
+
+enum ImportItemStatus {
+  PENDING  // aguardando decisão na revisão
+  ACCEPTED // marcado para importar
+  REJECTED // descartado pelo usuário
+  IMPORTED // já virou Transaction
 }

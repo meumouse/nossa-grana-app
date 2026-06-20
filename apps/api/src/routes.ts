@@ -20,6 +20,7 @@ import investmentsRoutes from './modules/investments/investments.routes';
 import syncRoutes from './modules/sync/sync.routes';
 import forecastRoutes from './modules/forecast/forecast.routes';
 import activityRoutes from './modules/activity/activity.routes';
+import importsRoutes from './modules/imports/imports.routes';
 
 /** Registra toda a árvore de rotas da API (montada sob /api pelo servidor). */
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -49,6 +50,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       scoped.register(syncRoutes, { prefix: '/sync' });
       scoped.register(forecastRoutes, { prefix: '/forecast' });
       scoped.register(activityRoutes, { prefix: '/activity' });
+      scoped.register(importsRoutes, { prefix: '/imports' });
     },
     { prefix: '/workspaces/:workspaceId' },
   );

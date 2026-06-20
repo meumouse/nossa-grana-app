@@ -6,6 +6,7 @@ import {
   ArrowLeftRight,
   CalendarClock,
   LineChart,
+  Sparkles,
   Eye,
   EyeOff,
   RefreshCw,
@@ -39,6 +40,7 @@ const LINKS = [
   { to: '/accounts', label: 'Contas', icon: Wallet },
   { to: '/payables', label: 'A pagar/receber', icon: CalendarClock },
   { to: '/forecast', label: 'Previsão', icon: LineChart },
+  { to: '/import', label: 'Importar (IA)', icon: Sparkles },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {

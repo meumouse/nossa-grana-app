@@ -12,6 +12,7 @@ import { AccountsPage } from './pages/AccountsPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { PayablesPage } from './pages/PayablesPage';
 import { ForecastPage } from './pages/ForecastPage';
+import { ImportPage } from './pages/ImportPage';
 
 function FullLoader() {
   return (
@@ -55,6 +56,7 @@ function AppRoutes() {
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/payables" element={<PayablesPage />} />
         <Route path="/forecast" element={<ForecastPage />} />
+        <Route path="/import" element={<ImportPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

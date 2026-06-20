@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import multipart from '@fastify/multipart';
 import { corsOrigins, env } from './env';
 import prismaPlugin from './plugins/prisma';
 import authPlugin from './plugins/auth';
@@ -25,6 +26,10 @@ export async function buildServer(): Promise<FastifyInstance> {
   });
   await app.register(cookie);
   await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
+  // Upload de documentos para importação (extratos, comprovantes).
+  await app.register(multipart, {
+    limits: { fileSize: env.IMPORT_MAX_FILE_MB * 1024 * 1024, files: 1 },
+  });
 
   // Infra
   await app.register(prismaPlugin);

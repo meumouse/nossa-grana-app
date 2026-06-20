@@ -27,6 +27,8 @@ interface RequestOpts {
   body?: unknown;
   auth?: boolean; // default true
   signal?: AbortSignal;
+  // Quando true, `body` é um FormData (upload) — não serializa nem fixa content-type.
+  form?: boolean;
 }
 
 // Evita várias renovações simultâneas: compartilha a mesma promise de refresh.
@@ -60,7 +62,8 @@ async function tryRefresh(): Promise<boolean> {
 
 async function raw<T>(path: string, opts: RequestOpts, retry = true): Promise<T> {
   const headers: Record<string, string> = {};
-  if (opts.body !== undefined) headers['content-type'] = 'application/json';
+  // FormData: o browser define o content-type (com boundary) sozinho.
+  if (opts.body !== undefined && !opts.form) headers['content-type'] = 'application/json';
   if (opts.auth !== false && session.accessToken) {
     headers.authorization = `Bearer ${session.accessToken}`;
   }
@@ -70,7 +73,12 @@ async function raw<T>(path: string, opts: RequestOpts, retry = true): Promise<T>
     res = await fetch(`${BASE}${path}`, {
       method: opts.method ?? 'GET',
       headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body:
+        opts.body === undefined
+          ? undefined
+          : opts.form
+            ? (opts.body as BodyInit)
+            : JSON.stringify(opts.body),
       signal: opts.signal,
     });
   } catch {
@@ -101,6 +109,8 @@ export const api = {
   post: <T>(path: string, body?: unknown, auth = true) => raw<T>(path, { method: 'POST', body, auth }),
   patch: <T>(path: string, body?: unknown) => raw<T>(path, { method: 'PATCH', body }),
   del: <T>(path: string) => raw<T>(path, { method: 'DELETE' }),
+  postForm: <T>(path: string, form: FormData) =>
+    raw<T>(path, { method: 'POST', body: form, form: true }),
 };
 
 /** Prefixo das rotas escopadas no workspace ativo. */

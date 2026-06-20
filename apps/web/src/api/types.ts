@@ -134,3 +134,41 @@ export interface DashboardSummary {
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown };
 }
+
+// ---- Importação por LLM ----
+export type ImportSource = 'PDF' | 'IMAGE' | 'CSV' | 'OFX';
+export type ImportStatus = 'PROCESSING' | 'PENDING_REVIEW' | 'CONFIRMED' | 'CANCELED' | 'FAILED';
+export type ImportItemStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'IMPORTED';
+
+export interface ImportItem {
+  id: string;
+  batchId: string;
+  date: string;
+  description: string;
+  amount: Money;
+  type: 'INCOME' | 'EXPENSE';
+  suggestedCategory: string | null;
+  categoryId: string | null;
+  accountId: string | null;
+  status: ImportItemStatus;
+  transactionId: string | null;
+  confidence: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ImportBatch {
+  id: string;
+  workspaceId: string;
+  createdById: string | null;
+  source: ImportSource;
+  status: ImportStatus;
+  filename: string | null;
+  mimeType: string | null;
+  model: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items?: ImportItem[];
+  _count?: { items: number };
+}
