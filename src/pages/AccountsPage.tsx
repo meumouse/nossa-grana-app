@@ -35,6 +35,22 @@ const TYPE_LABELS: Record<AccountType, string> = {
   OTHER: 'Outro',
 };
 
+const isCard = (t: AccountType) => t === 'CREDIT_CARD';
+const isBankAccount = (t: AccountType) => t === 'CHECKING' || t === 'SAVINGS';
+
+/** "1.234,56" | "8,99" -> número; vazio -> undefined. */
+const parseNum = (v: string): number | undefined => {
+  const s = v.trim().replace(/\./g, '').replace(',', '.');
+  if (s === '') return undefined;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : undefined;
+};
+const parseDay = (v: string): number | undefined => {
+  const n = parseNum(v);
+  if (n === undefined) return undefined;
+  return Math.min(31, Math.max(1, Math.round(n)));
+};
+
 export function AccountsPage() {
   const { activeId } = useWorkspace();
   const accounts = useLiveAccounts(activeId) ?? [];
@@ -48,12 +64,30 @@ export function AccountsPage() {
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('CHECKING');
   const [openingBalance, setOpeningBalance] = useState('0');
+  // Cartão de crédito
+  const [creditLimit, setCreditLimit] = useState('');
+  const [statementClosingDay, setStatementClosingDay] = useState('');
+  const [paymentDueDay, setPaymentDueDay] = useState('');
+  const [lateInterestRate, setLateInterestRate] = useState('');
+  // Conta bancária (LIS / cheque especial)
+  const [overdraftLimit, setOverdraftLimit] = useState('');
+  const [overdraftInterestRate, setOverdraftInterestRate] = useState('');
+
+  const resetExtras = () => {
+    setCreditLimit('');
+    setStatementClosingDay('');
+    setPaymentDueDay('');
+    setLateInterestRate('');
+    setOverdraftLimit('');
+    setOverdraftInterestRate('');
+  };
 
   const openNew = () => {
     setEditing(null);
     setName('');
     setType('CHECKING');
     setOpeningBalance('0');
+    resetExtras();
     setOpened(true);
   };
   const openEdit = (a: LocalAccount) => {
@@ -61,6 +95,12 @@ export function AccountsPage() {
     setName(a.name);
     setType(a.type);
     setOpeningBalance(String(a.openingBalance));
+    setCreditLimit(a.creditLimit ?? '');
+    setStatementClosingDay(a.statementClosingDay != null ? String(a.statementClosingDay) : '');
+    setPaymentDueDay(a.paymentDueDay != null ? String(a.paymentDueDay) : '');
+    setLateInterestRate(a.lateInterestRate ?? '');
+    setOverdraftLimit(a.overdraftLimit ?? '');
+    setOverdraftInterestRate(a.overdraftInterestRate ?? '');
     setOpened(true);
   };
 
@@ -73,16 +113,62 @@ export function AccountsPage() {
           : 'Erro inesperado',
     );
 
+  // Campos específicos do tipo selecionado. Em edição, enviamos `null` para
+  // limpar valores que ficaram em branco; na criação, omitimos os vazios.
+  const typeSpecific = (): Partial<
+    Pick<
+      LocalAccount,
+      | 'creditLimit'
+      | 'statementClosingDay'
+      | 'paymentDueDay'
+      | 'lateInterestRate'
+      | 'overdraftLimit'
+      | 'overdraftInterestRate'
+    >
+  > => {
+    const clearable = !!editing?.id;
+    // Em edição, campo vazio vira null (limpa); na criação, omitimos (undefined).
+    const empty = clearable ? null : undefined;
+    const money = (n: number | undefined) => (n !== undefined ? String(n) : empty);
+    const day = (n: number | undefined) => (n !== undefined ? n : empty);
+
+    if (isCard(type)) {
+      return {
+        creditLimit: money(parseNum(creditLimit)),
+        statementClosingDay: day(parseDay(statementClosingDay)),
+        paymentDueDay: day(parseDay(paymentDueDay)),
+        lateInterestRate: money(parseNum(lateInterestRate)),
+      };
+    }
+    if (isBankAccount(type)) {
+      return {
+        overdraftLimit: money(parseNum(overdraftLimit)),
+        overdraftInterestRate: money(parseNum(overdraftInterestRate)),
+      };
+    }
+    return {};
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeId || !name.trim()) return toast.error('Informe o nome');
     setSaving(true);
     try {
       const opening = String(Number(openingBalance.replace(',', '.')) || 0);
+      const extras = typeSpecific();
       if (editing?.id) {
-        await accountApi.update(activeId, editing.id, { name: name.trim(), openingBalance: opening });
+        await accountApi.update(activeId, editing.id, {
+          name: name.trim(),
+          openingBalance: opening,
+          ...extras,
+        });
       } else {
-        await accountApi.create(activeId, { name: name.trim(), type, openingBalance: opening });
+        await accountApi.create(activeId, {
+          name: name.trim(),
+          type,
+          openingBalance: opening,
+          ...extras,
+        });
       }
       setOpened(false);
       await syncNow();
@@ -124,6 +210,17 @@ export function AccountsPage() {
               <div>
                 <p className="font-medium">{a.name}</p>
                 <p className="text-xs text-muted-foreground">{TYPE_LABELS[a.type]}</p>
+                {isCard(a.type) && a.creditLimit != null && (
+                  <p className="text-xs text-muted-foreground">
+                    Limite {formatMoneyCents(Math.round(Number(a.creditLimit) * 100), hidden)}
+                    {a.paymentDueDay != null && ` · vence dia ${a.paymentDueDay}`}
+                  </p>
+                )}
+                {isBankAccount(a.type) && a.overdraftLimit != null && Number(a.overdraftLimit) > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    LIS {formatMoneyCents(Math.round(Number(a.overdraftLimit) * 100), hidden)}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <span className="font-bold">{formatMoneyCents(balances.get(a.key) ?? 0, hidden)}</span>
@@ -184,6 +281,81 @@ export function AccountsPage() {
                 onChange={(e) => setOpeningBalance(e.target.value)}
               />
             </div>
+
+            {isCard(type) && (
+              <div className="space-y-4 rounded-md border border-border/60 p-3">
+                <p className="text-sm font-medium">Cartão de crédito</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="acc-limit">Limite do cartão</Label>
+                  <Input
+                    id="acc-limit"
+                    inputMode="decimal"
+                    placeholder="Ex.: 5000,00"
+                    value={creditLimit}
+                    onChange={(e) => setCreditLimit(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="acc-closing">Fechamento (dia)</Label>
+                    <Input
+                      id="acc-closing"
+                      inputMode="numeric"
+                      placeholder="Ex.: 28"
+                      value={statementClosingDay}
+                      onChange={(e) => setStatementClosingDay(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="acc-due">Vencimento (dia)</Label>
+                    <Input
+                      id="acc-due"
+                      inputMode="numeric"
+                      placeholder="Ex.: 5"
+                      value={paymentDueDay}
+                      onChange={(e) => setPaymentDueDay(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="acc-late">Juros por atraso (% a.m.)</Label>
+                  <Input
+                    id="acc-late"
+                    inputMode="decimal"
+                    placeholder="Ex.: 8,99"
+                    value={lateInterestRate}
+                    onChange={(e) => setLateInterestRate(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {isBankAccount(type) && (
+              <div className="space-y-4 rounded-md border border-border/60 p-3">
+                <p className="text-sm font-medium">Limite da conta</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="acc-lis">LIS (limite da conta)</Label>
+                  <Input
+                    id="acc-lis"
+                    inputMode="decimal"
+                    placeholder="Ex.: 2000,00"
+                    value={overdraftLimit}
+                    onChange={(e) => setOverdraftLimit(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="acc-lis-rate">Taxa de juros (% a.m.)</Label>
+                  <Input
+                    id="acc-lis-rate"
+                    inputMode="decimal"
+                    placeholder="Ex.: 8,00"
+                    value={overdraftInterestRate}
+                    onChange={(e) => setOverdraftInterestRate(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
             <Button type="submit" className="w-full" disabled={saving}>
               Salvar
             </Button>

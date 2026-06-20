@@ -92,6 +92,9 @@ async function putAccount(a: Account): Promise<void> {
     creditLimit: a.creditLimit,
     statementClosingDay: a.statementClosingDay,
     paymentDueDay: a.paymentDueDay,
+    lateInterestRate: a.lateInterestRate,
+    overdraftLimit: a.overdraftLimit,
+    overdraftInterestRate: a.overdraftInterestRate,
     updatedAt: a.updatedAt,
     deletedAt: a.deletedAt,
   });

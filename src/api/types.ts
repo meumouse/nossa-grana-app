@@ -44,6 +44,30 @@ export interface Workspace {
   role: MemberRole;
 }
 
+export interface WorkspaceSettings {
+  baseCurrency: string;
+  monthStartDay: number;
+  forecastHorizon: number;
+  variableLookback: number;
+  weekStartsOnMonday: boolean;
+  // Importação por IA. A chave nunca trafega de volta: só o booleano.
+  llmProvider: string | null;
+  llmModel: string | null;
+  llmApiKeySet: boolean;
+}
+
+export interface WorkspaceSettingsInput {
+  baseCurrency?: string;
+  monthStartDay?: number;
+  forecastHorizon?: number;
+  variableLookback?: number;
+  weekStartsOnMonday?: boolean;
+  llmProvider?: 'openai';
+  llmModel?: string;
+  /** Vazio limpa a chave; ausente mantém a atual. */
+  llmApiKey?: string;
+}
+
 export interface Account {
   id: string;
   clientId: string | null;
@@ -59,6 +83,9 @@ export interface Account {
   creditLimit: Money | null;
   statementClosingDay: number | null;
   paymentDueDay: number | null;
+  lateInterestRate: Money | null;
+  overdraftLimit: Money | null;
+  overdraftInterestRate: Money | null;
   balance?: Money;
   creditAvailable?: Money | null;
   updatedAt: string;

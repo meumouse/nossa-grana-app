@@ -35,6 +35,9 @@ export interface LocalAccount {
   creditLimit: Money | null;
   statementClosingDay: number | null;
   paymentDueDay: number | null;
+  lateInterestRate: Money | null;
+  overdraftLimit: Money | null;
+  overdraftInterestRate: Money | null;
   updatedAt: string;
   deletedAt: string | null;
 }
