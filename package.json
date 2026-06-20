@@ -1,0 +1,26 @@
+{
+  "name": "nossa-grana",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PWA de finanças pessoais & familiares — monorepo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace apps/api",
+    "dev:api": "npm run dev --workspace apps/api",
+    "dev:web": "npm run dev --workspace apps/web",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "prisma:generate": "npm run prisma:generate --workspace apps/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace apps/api",
+    "prisma:studio": "npm run prisma:studio --workspace apps/api",
+    "seed": "npm run seed --workspace apps/api"
+  }
+}

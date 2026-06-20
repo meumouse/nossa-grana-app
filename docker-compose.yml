@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nossa-grana-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nossagrana
+      POSTGRES_PASSWORD: nossagrana
+      POSTGRES_DB: nossagrana
+    # Host na 5433 p/ não conflitar com um PostgreSQL local na 5432.
+    ports:
+      - "5433:5432"
+    volumes:
+      - nossa_grana_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nossagrana"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  nossa_grana_pgdata:
