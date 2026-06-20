@@ -105,7 +105,7 @@ export function TransactionsPage() {
                   <span
                     className={cn(
                       'whitespace-nowrap font-bold',
-                      transfer ? 'text-blue-500' : income ? 'text-success' : 'text-destructive',
+                      transfer ? 'text-muted-foreground' : income ? 'text-success' : 'text-destructive',
                     )}
                   >
                     {income ? '+' : transfer ? '' : '−'}

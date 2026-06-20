@@ -6,11 +6,8 @@ import './index.css';
 import { App } from './App';
 import { Toaster } from './components/ui/sonner';
 
-// Tema: segue a preferência do sistema (classe .dark exigida pelo Tailwind/shadcn).
-const applyTheme = (dark: boolean) => document.documentElement.classList.toggle('dark', dark);
-const mql = window.matchMedia('(prefers-color-scheme: dark)');
-applyTheme(mql.matches);
-mql.addEventListener('change', (e) => applyTheme(e.matches));
+// Tema: monocromático escuro fixo (classe .dark exigida pelo Tailwind/shadcn).
+document.documentElement.classList.add('dark');
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false } },

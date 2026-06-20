@@ -3,57 +3,37 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 142 71% 35%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 142 71% 35%;
-    --success-foreground: 0 0% 100%;
-    --warning: 25 95% 53%;
-    --warning-foreground: 0 0% 100%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 142 71% 35%;
-    --radius: 0.6rem;
-  }
-
+  /* Tema monocromático escuro e elegante (cool slate, baixa saturação).
+     :root e .dark são idênticos para garantir o tema escuro independente
+     da preferência do sistema. */
+  :root,
   .dark {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 98%;
-    --card: 222 45% 11%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 45% 11%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 142 69% 45%;
-    --primary-foreground: 222 47% 8%;
-    --secondary: 217 33% 18%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 18%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 18%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 47%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142 69% 45%;
-    --success-foreground: 222 47% 8%;
-    --warning: 25 95% 53%;
-    --warning-foreground: 222 47% 8%;
-    --border: 217 33% 20%;
-    --input: 217 33% 22%;
-    --ring: 142 69% 45%;
+    --background: 240 6% 8%;
+    --foreground: 240 6% 92%;
+    --card: 240 6% 11%;
+    --card-foreground: 240 6% 92%;
+    --popover: 240 6% 11%;
+    --popover-foreground: 240 6% 92%;
+    --primary: 240 6% 88%;
+    --primary-foreground: 240 8% 10%;
+    --secondary: 240 5% 16%;
+    --secondary-foreground: 240 6% 92%;
+    --muted: 240 5% 15%;
+    --muted-foreground: 240 5% 58%;
+    --accent: 240 5% 18%;
+    --accent-foreground: 240 6% 95%;
+    /* Vermelho/verde dessaturados — mantidos apenas para semântica de
+       despesa/receita, em tom discreto e coerente com o monocromático. */
+    --destructive: 4 45% 52%;
+    --destructive-foreground: 240 6% 95%;
+    --success: 150 22% 52%;
+    --success-foreground: 240 8% 10%;
+    --warning: 40 35% 55%;
+    --warning-foreground: 240 8% 10%;
+    --border: 240 5% 18%;
+    --input: 240 5% 22%;
+    --ring: 240 6% 70%;
+    --radius: 0.6rem;
   }
 
   * {
