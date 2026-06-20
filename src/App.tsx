@@ -18,6 +18,7 @@ import { InvoicesPage } from './pages/InvoicesPage';
 import { InvestmentsPage } from './pages/InvestmentsPage';
 import { ForecastPage } from './pages/ForecastPage';
 import { ImportPage } from './pages/ImportPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 function FullLoader() {
   return (
@@ -67,6 +68,7 @@ function AppRoutes() {
         <Route path="/investments" element={<InvestmentsPage />} />
         <Route path="/forecast" element={<ForecastPage />} />
         <Route path="/import" element={<ImportPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -21,6 +21,8 @@ import type {
   Transaction,
   User,
   Workspace,
+  WorkspaceSettings,
+  WorkspaceSettingsInput,
 } from './types';
 
 // ---- Auth ----
@@ -38,6 +40,10 @@ export const workspaceApi = {
   list: () => api.get<{ workspaces: Workspace[] }>('/api/workspaces'),
   create: (body: { name: string; type?: 'PERSONAL' | 'SHARED' }) =>
     api.post<{ workspace: Workspace }>('/api/workspaces', body),
+  getSettings: (ws: string) =>
+    api.get<{ settings: WorkspaceSettings | null }>(wsPath(ws, '/settings')),
+  updateSettings: (ws: string, body: WorkspaceSettingsInput) =>
+    api.patch<{ settings: WorkspaceSettings }>(wsPath(ws, '/settings'), body),
 };
 
 // ---- Accounts (online) ----

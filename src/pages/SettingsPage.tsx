@@ -1,0 +1,329 @@
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, Sparkles, KeyRound, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/sonner';
+import { useWorkspace } from '@/workspace/WorkspaceProvider';
+import { workspaceApi } from '@/api/endpoints';
+import { ApiError, OfflineError } from '@/api/client';
+import type { WorkspaceSettingsInput } from '@/api/types';
+
+// Modelos OpenAI com visão (necessária p/ ler PDF/imagem de extratos).
+const MODEL_SUGGESTIONS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini'];
+const CURRENCIES = ['BRL', 'USD', 'EUR', 'GBP', 'ARS'];
+
+function handleError(err: unknown) {
+  toast.error(
+    err instanceof OfflineError
+      ? 'Sem conexão — as configurações precisam do servidor'
+      : err instanceof ApiError
+        ? err.message
+        : 'Erro inesperado',
+  );
+}
+
+export function SettingsPage() {
+  const { activeId, active } = useWorkspace();
+  const qc = useQueryClient();
+  const canEdit = active?.role === 'OWNER' || active?.role === 'ADMIN';
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['settings', activeId],
+    queryFn: () => workspaceApi.getSettings(activeId!),
+    enabled: !!activeId,
+  });
+  const settings = data?.settings ?? null;
+
+  // --- Geral / financeiro ---
+  const [baseCurrency, setBaseCurrency] = useState('BRL');
+  const [monthStartDay, setMonthStartDay] = useState('1');
+  const [forecastHorizon, setForecastHorizon] = useState('12');
+  const [variableLookback, setVariableLookback] = useState('3');
+  const [weekStartsOnMonday, setWeekStartsOnMonday] = useState(true);
+
+  // --- IA ---
+  const [provider, setProvider] = useState<'openai'>('openai');
+  const [model, setModel] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const keyConfigured = settings?.llmApiKeySet ?? false;
+
+  // Hidrata o formulário quando as settings chegam (a chave nunca volta).
+  useEffect(() => {
+    if (!settings) return;
+    setBaseCurrency(settings.baseCurrency ?? 'BRL');
+    setMonthStartDay(String(settings.monthStartDay ?? 1));
+    setForecastHorizon(String(settings.forecastHorizon ?? 12));
+    setVariableLookback(String(settings.variableLookback ?? 3));
+    setWeekStartsOnMonday(settings.weekStartsOnMonday ?? true);
+    setProvider((settings.llmProvider as 'openai') || 'openai');
+    setModel(settings.llmModel ?? '');
+    setApiKey('');
+  }, [settings]);
+
+  const save = useMutation({
+    mutationFn: (body: WorkspaceSettingsInput) => workspaceApi.updateSettings(activeId!, body),
+    onSuccess: () => {
+      setApiKey('');
+      void qc.invalidateQueries({ queryKey: ['settings', activeId] });
+      toast.success('Configurações salvas');
+    },
+    onError: handleError,
+  });
+
+  const onSubmitAi = (e: React.FormEvent) => {
+    e.preventDefault();
+    const body: WorkspaceSettingsInput = {
+      llmProvider: provider,
+      llmModel: model.trim(),
+    };
+    // Só envia a chave se o usuário digitou algo (evita sobrescrever com vazio).
+    if (apiKey.trim()) body.llmApiKey = apiKey.trim();
+    save.mutate(body);
+  };
+
+  // Clampa um inteiro dentro de [min,max], caindo no fallback se for inválido.
+  const clamp = (raw: string, min: number, max: number, fallback: number) => {
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+  };
+
+  const onSubmitGeneral = (e: React.FormEvent) => {
+    e.preventDefault();
+    save.mutate({
+      baseCurrency,
+      monthStartDay: clamp(monthStartDay, 1, 28, 1),
+      forecastHorizon: clamp(forecastHorizon, 1, 36, 12),
+      variableLookback: clamp(variableLookback, 1, 12, 3),
+      weekStartsOnMonday,
+    });
+  };
+
+  const clearKey = () => {
+    if (!confirm('Remover a chave da OpenAI deste perfil?')) return;
+    save.mutate({ llmApiKey: '' });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
+        <p className="text-sm text-muted-foreground">
+          Preferências do perfil <span className="font-medium text-foreground">{active?.name}</span>.
+        </p>
+      </div>
+
+      <Card className="max-w-2xl p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <SlidersHorizontal className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold">Geral</h2>
+        </div>
+        <p className="mb-5 text-sm text-muted-foreground">
+          Moeda, mês financeiro e parâmetros da previsão de saldo deste perfil.
+        </p>
+
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : isError ? (
+          <p className="py-4 text-sm text-destructive">Não foi possível carregar as configurações.</p>
+        ) : (
+          <form onSubmit={onSubmitGeneral} className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="baseCurrency">Moeda base</Label>
+                <Select value={baseCurrency} onValueChange={setBaseCurrency} disabled={!canEdit}>
+                  <SelectTrigger id="baseCurrency">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="monthStartDay">Dia de início do mês</Label>
+                <Input
+                  id="monthStartDay"
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={monthStartDay}
+                  onChange={(e) => setMonthStartDay(e.target.value)}
+                  disabled={!canEdit}
+                />
+                <p className="text-xs text-muted-foreground">1–28. Útil p/ quem organiza por data do salário.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="forecastHorizon">Horizonte da previsão (meses)</Label>
+                <Input
+                  id="forecastHorizon"
+                  type="number"
+                  min={1}
+                  max={36}
+                  value={forecastHorizon}
+                  onChange={(e) => setForecastHorizon(e.target.value)}
+                  disabled={!canEdit}
+                />
+                <p className="text-xs text-muted-foreground">1–36 meses projetados à frente.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="variableLookback">Histórico de gastos variáveis (meses)</Label>
+                <Input
+                  id="variableLookback"
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={variableLookback}
+                  onChange={(e) => setVariableLookback(e.target.value)}
+                  disabled={!canEdit}
+                />
+                <p className="text-xs text-muted-foreground">1–12. Base da média móvel na previsão.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label htmlFor="weekStartsOnMonday">Semana começa na segunda</Label>
+                <p className="text-xs text-muted-foreground">Desligado = domingo.</p>
+              </div>
+              <Switch
+                id="weekStartsOnMonday"
+                checked={weekStartsOnMonday}
+                onCheckedChange={setWeekStartsOnMonday}
+                disabled={!canEdit}
+              />
+            </div>
+
+            {canEdit ? (
+              <Button type="submit" disabled={save.isPending}>
+                {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Salvar
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Apenas administradores do perfil podem alterar estas configurações.
+              </p>
+            )}
+          </form>
+        )}
+      </Card>
+
+      <Card className="max-w-2xl p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold">Importação por IA</h2>
+        </div>
+        <p className="mb-5 text-sm text-muted-foreground">
+          Defina a chave da OpenAI e o modelo usados para ler extratos, faturas e comprovantes.
+          A chave é guardada cifrada e compartilhada pelos membros deste perfil.
+        </p>
+
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : isError ? (
+          <p className="py-4 text-sm text-destructive">Não foi possível carregar as configurações.</p>
+        ) : (
+          <form onSubmit={onSubmitAi} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="provider">Provedor</Label>
+              <Select value={provider} onValueChange={(v) => setProvider(v as 'openai')} disabled={!canEdit}>
+                <SelectTrigger id="provider" className="w-full sm:w-64">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="model">Modelo de LLM</Label>
+              <Input
+                id="model"
+                list="model-suggestions"
+                placeholder="gpt-4o"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={!canEdit}
+                className="w-full sm:w-64"
+              />
+              <datalist id="model-suggestions">
+                {MODEL_SUGGESTIONS.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+              <p className="text-xs text-muted-foreground">
+                Use um modelo com visão (lê PDF/imagem). Em branco usa o padrão do servidor.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="apiKey" className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4" />
+                Chave de API da OpenAI
+                {keyConfigured && (
+                  <Badge variant="success" className="gap-1">
+                    <ShieldCheck className="h-3 w-3" /> Configurada
+                  </Badge>
+                )}
+              </Label>
+              <Input
+                id="apiKey"
+                type="password"
+                autoComplete="off"
+                placeholder={keyConfigured ? '•••••••••• (deixe em branco p/ manter)' : 'sk-...'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                disabled={!canEdit}
+              />
+              <p className="text-xs text-muted-foreground">
+                Nunca exibimos a chave salva. Digite uma nova para substituí-la.
+              </p>
+            </div>
+
+            {canEdit ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="submit" disabled={save.isPending}>
+                  {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Salvar
+                </Button>
+                {keyConfigured && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={clearKey}
+                    disabled={save.isPending}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    Remover chave
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Apenas administradores do perfil podem alterar estas configurações.
+              </p>
+            )}
+          </form>
+        )}
+      </Card>
+    </div>
+  );
+}

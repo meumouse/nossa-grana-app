@@ -12,6 +12,7 @@ import {
   TrendingUp,
   LineChart,
   Sparkles,
+  Settings,
   Eye,
   EyeOff,
   RefreshCw,
@@ -20,6 +21,7 @@ import {
   LogOut,
   Menu as MenuIcon,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +53,7 @@ const LINKS = [
   { to: '/investments', label: 'Investimentos', icon: TrendingUp },
   { to: '/forecast', label: 'Previsão', icon: LineChart },
   { to: '/import', label: 'Importar (IA)', icon: Sparkles },
+  { to: '/settings', label: 'Configurações', icon: Settings },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -166,6 +169,12 @@ export function AppLayout() {
                 {user?.email}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to="/settings">
+                  <Settings className="h-4 w-4" />
+                  Configurações
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void logout()}>
                 <LogOut className="h-4 w-4" />
                 Sair
