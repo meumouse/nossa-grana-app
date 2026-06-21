@@ -130,7 +130,7 @@ export function ShareTransactionModal({
 
       if (bulk) {
         await bulkSetSharesLocal(targetKeys, shares, peopleCount);
-      } else {
+      } else if (targetKeys[0]) {
         await setSharesLocal(targetKeys[0], shares, peopleCount);
       }
       void syncNow();
@@ -145,6 +145,7 @@ export function ShareTransactionModal({
   };
 
   const unshare = async () => {
+    if (!targetKeys[0]) return;
     setSaving(true);
     try {
       await setSharesLocal(targetKeys[0], null);

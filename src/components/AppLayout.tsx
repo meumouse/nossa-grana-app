@@ -51,7 +51,7 @@ const THEME_LABEL: Record<ThemeMode, string> = {
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length];
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length]!;
   const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
   return (
     <Button

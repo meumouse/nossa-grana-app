@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/sonner';
-import { cn } from '@/lib/utils';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { ConsistencyFinding, ConsistencyKind } from '@/api/types';
 import { consistencyApi } from '@/api/endpoints';
