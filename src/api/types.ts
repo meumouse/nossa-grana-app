@@ -3,11 +3,11 @@
 
 export type Money = string;
 
+// Cartão de crédito NÃO é um tipo de conta — é entidade própria (ver CreditCard).
 export type AccountType =
   | 'CHECKING'
   | 'SAVINGS'
   | 'CASH'
-  | 'CREDIT_CARD'
   | 'DEBIT_CARD'
   | 'MEAL_VOUCHER'
   | 'INVESTMENT'
@@ -122,16 +122,37 @@ export interface Account {
   includeInTotal: boolean;
   archived: boolean;
   sortOrder: number;
-  creditLimit: Money | null;
-  statementClosingDay: number | null;
-  paymentDueDay: number | null;
-  lateInterestRate: Money | null;
   agency: string | null;
   accountNumber: string | null;
   accountDigit: string | null;
   overdraftLimit: Money | null;
   overdraftInterestRate: Money | null;
   balance?: Money;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+/**
+ * Cartão de crédito — entidade SEPARADA de conta. Não tem saldo nem entra no
+ * patrimônio: tem limite e fatura. `creditAvailable` = limite − compras não pagas.
+ */
+export interface CreditCard {
+  id: string;
+  clientId: string | null;
+  workspaceId: string;
+  name: string;
+  currency: string;
+  institutionId: string | null;
+  institution?: Pick<Institution, 'id' | 'name' | 'brandColor' | 'logoUrl'> | null;
+  iconColor: string | null;
+  archived: boolean;
+  sortOrder: number;
+  creditLimit: Money | null;
+  statementClosingDay: number | null;
+  paymentDueDay: number | null;
+  lateInterestRate: Money | null;
+  /** Conta corrente de onde a fatura é paga por padrão. */
+  paymentAccountId: string | null;
   creditAvailable?: Money | null;
   updatedAt: string;
   deletedAt: string | null;
@@ -165,7 +186,9 @@ export interface Transaction {
   id: string;
   clientId: string | null;
   workspaceId: string;
-  accountId: string;
+  // Dono: conta OU cartão (exatamente um preenchido).
+  accountId: string | null;
+  creditCardId: string | null;
   type: TransactionType;
   status: TransactionStatus;
   amount: Money;
@@ -178,6 +201,7 @@ export interface Transaction {
   paidAt: string | null;
   transferId: string | null;
   counterAccountId: string | null;
+  counterCreditCardId: string | null;
   creditCardInvoiceId: string | null;
   installmentPlanId?: string | null;
   installmentNumber?: number | null;
@@ -190,6 +214,7 @@ export interface Transaction {
   deletedAt: string | null;
   category?: Pick<Category, 'id' | 'name' | 'color' | 'icon' | 'nature' | 'kind'> | null;
   account?: Pick<Account, 'id' | 'name' | 'type'> | null;
+  creditCard?: Pick<CreditCard, 'id' | 'name'> | null;
 }
 
 // ---- Verificação de inconsistências (IA) ----
@@ -302,6 +327,10 @@ export interface InstallmentPlan {
   installments: number;
   firstDueDate: string;
   categoryId: string | null;
+  // Divisão do parcelamento entre pessoas (espelha o rateio de Transaction).
+  shared?: boolean;
+  shareCount?: number | null;
+  shares?: TxShare[] | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -315,7 +344,7 @@ export type InvoiceStatus = 'OPEN' | 'CLOSED' | 'PAID' | 'OVERDUE';
 export interface CreditCardInvoice {
   id: string;
   workspaceId: string;
-  accountId: string;
+  creditCardId: string;
   closingDate: string;
   dueDate: string;
   status: InvoiceStatus;
@@ -323,7 +352,7 @@ export interface CreditCardInvoice {
   createdAt: string;
   updatedAt: string;
   total: Money;
-  account?: { id: string; name: string; paymentAccountId: string | null };
+  creditCard?: { id: string; name: string; paymentAccountId: string | null };
   transactions?: Transaction[];
 }
 

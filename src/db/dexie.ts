@@ -36,15 +36,35 @@ export interface LocalAccount {
   includeInTotal: boolean;
   archived: boolean;
   sortOrder: number;
-  creditLimit: Money | null;
-  statementClosingDay: number | null;
-  paymentDueDay: number | null;
-  lateInterestRate: Money | null;
   agency: string | null;
   accountNumber: string | null;
   accountDigit: string | null;
   overdraftLimit: Money | null;
   overdraftInterestRate: Money | null;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+/**
+ * Cartão de crédito local (offline-first). Entidade SEPARADA de conta: não tem
+ * saldo (openingBalance) — só limite + ciclo de fatura.
+ */
+export interface LocalCreditCard {
+  key: string;
+  id: string | null;
+  clientId: string;
+  workspaceId: string;
+  name: string;
+  currency: string;
+  institutionId: string | null;
+  iconColor: string | null;
+  archived: boolean;
+  sortOrder: number;
+  creditLimit: Money | null;
+  statementClosingDay: number | null;
+  paymentDueDay: number | null;
+  lateInterestRate: Money | null;
+  paymentAccountId: string | null;
   updatedAt: string;
   deletedAt: string | null;
 }
@@ -85,7 +105,9 @@ export interface LocalTransaction {
   id: string | null;
   clientId: string;
   workspaceId: string;
-  accountId: string; // key local da conta
+  // Dono: conta OU cartão (key local). Exatamente um preenchido.
+  accountId: string | null; // key local da conta
+  creditCardId: string | null; // key local do cartão
   type: TransactionType;
   status: TransactionStatus;
   amount: Money;
@@ -98,6 +120,7 @@ export interface LocalTransaction {
   paidAt: string | null;
   transferId: string | null;
   counterAccountId: string | null;
+  counterCreditCardId: string | null;
   // Duplicidade: usuário confirmou que NÃO é duplicata (silencia o alerta).
   duplicateDismissed?: boolean;
   // Compartilhamento/divisão da conta entre pessoas.
@@ -108,7 +131,7 @@ export interface LocalTransaction {
   deletedAt: string | null;
 }
 
-export type SyncEntity = 'account' | 'category' | 'transaction';
+export type SyncEntity = 'account' | 'creditCard' | 'category' | 'transaction';
 export type SyncOp = 'upsert' | 'delete';
 
 export interface OutboxItem {
@@ -127,6 +150,7 @@ export interface MetaRow {
 
 class NossaGranaDB extends Dexie {
   accounts!: Table<LocalAccount, string>;
+  creditCards!: Table<LocalCreditCard, string>;
   categories!: Table<LocalCategory, string>;
   transactions!: Table<LocalTransaction, string>;
   institutions!: Table<LocalInstitution, string>;
@@ -145,6 +169,13 @@ class NossaGranaDB extends Dexie {
     // v2: catálogo de instituições (bancos) cacheado p/ render offline.
     this.version(2).stores({
       institutions: 'id, workspaceId',
+    });
+    // v3: cartão de crédito como entidade SEPARADA de conta (tabela própria) e
+    // transações ganham creditCardId (compra no cartão). Dexie é schemaless fora
+    // dos índices, então transações antigas seguem válidas (creditCardId = undefined).
+    this.version(3).stores({
+      creditCards: 'key, id, clientId, workspaceId',
+      transactions: 'key, id, clientId, workspaceId, accountId, creditCardId, status, date',
     });
     // Campos de duplicidade/compartilhamento (duplicateDismissed, shared,
     // shareCount, shares) NÃO precisam de migração: Dexie é schemaless fora dos

@@ -29,7 +29,6 @@ const TYPE_LABELS: Record<AccountType, string> = {
   CHECKING: 'Conta corrente',
   SAVINGS: 'Poupança',
   CASH: 'Dinheiro',
-  CREDIT_CARD: 'Cartão de crédito',
   DEBIT_CARD: 'Cartão de débito',
   MEAL_VOUCHER: 'Vale (VR/VA)',
   INVESTMENT: 'Investimentos',
@@ -37,7 +36,7 @@ const TYPE_LABELS: Record<AccountType, string> = {
   OTHER: 'Outro',
 };
 
-const isCard = (t: AccountType) => t === 'CREDIT_CARD';
+// Cartão de crédito é gerido em outra página (CardsPage) — não é tipo de conta.
 const isBankAccount = (t: AccountType) => t === 'CHECKING' || t === 'SAVINGS';
 
 /** "1.234,56" | "8,99" -> número; vazio -> undefined. */
@@ -47,12 +46,6 @@ const parseNum = (v: string): number | undefined => {
   const n = Number(s);
   return Number.isFinite(n) ? n : undefined;
 };
-const parseDay = (v: string): number | undefined => {
-  const n = parseNum(v);
-  if (n === undefined) return undefined;
-  return Math.min(31, Math.max(1, Math.round(n)));
-};
-
 const NO_BANK = 'none';
 
 export function AccountsPage() {
@@ -71,11 +64,6 @@ export function AccountsPage() {
   const [type, setType] = useState<AccountType>('CHECKING');
   const [institutionId, setInstitutionId] = useState<string>(NO_BANK);
   const [openingBalance, setOpeningBalance] = useState('0');
-  // Cartão de crédito
-  const [creditLimit, setCreditLimit] = useState('');
-  const [statementClosingDay, setStatementClosingDay] = useState('');
-  const [paymentDueDay, setPaymentDueDay] = useState('');
-  const [lateInterestRate, setLateInterestRate] = useState('');
   // Conta bancária (dados + LIS / cheque especial)
   const [agency, setAgency] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -84,10 +72,6 @@ export function AccountsPage() {
   const [overdraftInterestRate, setOverdraftInterestRate] = useState('');
 
   const resetExtras = () => {
-    setCreditLimit('');
-    setStatementClosingDay('');
-    setPaymentDueDay('');
-    setLateInterestRate('');
     setAgency('');
     setAccountNumber('');
     setAccountDigit('');
@@ -110,10 +94,6 @@ export function AccountsPage() {
     setType(a.type);
     setInstitutionId(a.institutionId ?? NO_BANK);
     setOpeningBalance(String(a.openingBalance));
-    setCreditLimit(a.creditLimit ?? '');
-    setStatementClosingDay(a.statementClosingDay != null ? String(a.statementClosingDay) : '');
-    setPaymentDueDay(a.paymentDueDay != null ? String(a.paymentDueDay) : '');
-    setLateInterestRate(a.lateInterestRate ?? '');
     setAgency(a.agency ?? '');
     setAccountNumber(a.accountNumber ?? '');
     setAccountDigit(a.accountDigit ?? '');
@@ -136,32 +116,15 @@ export function AccountsPage() {
   const typeSpecific = (): Partial<
     Pick<
       LocalAccount,
-      | 'creditLimit'
-      | 'statementClosingDay'
-      | 'paymentDueDay'
-      | 'lateInterestRate'
-      | 'agency'
-      | 'accountNumber'
-      | 'accountDigit'
-      | 'overdraftLimit'
-      | 'overdraftInterestRate'
+      'agency' | 'accountNumber' | 'accountDigit' | 'overdraftLimit' | 'overdraftInterestRate'
     >
   > => {
     const clearable = !!editing?.id;
     // Em edição, campo vazio vira null (limpa); na criação, omitimos (undefined).
     const empty = clearable ? null : undefined;
     const money = (n: number | undefined) => (n !== undefined ? String(n) : empty);
-    const day = (n: number | undefined) => (n !== undefined ? n : empty);
     const text = (v: string) => (v.trim() === '' ? empty : v.trim());
 
-    if (isCard(type)) {
-      return {
-        creditLimit: money(parseNum(creditLimit)),
-        statementClosingDay: day(parseDay(statementClosingDay)),
-        paymentDueDay: day(parseDay(paymentDueDay)),
-        lateInterestRate: money(parseNum(lateInterestRate)),
-      };
-    }
     if (isBankAccount(type)) {
       return {
         agency: text(agency),
@@ -245,12 +208,6 @@ export function AccountsPage() {
                 <div className="min-w-0">
                 <p className="font-medium">{a.name}</p>
                 <p className="text-xs text-muted-foreground">{TYPE_LABELS[a.type]}</p>
-                {isCard(a.type) && a.creditLimit != null && (
-                  <p className="text-xs text-muted-foreground">
-                    Limite {formatMoneyCents(Math.round(Number(a.creditLimit) * 100), hidden)}
-                    {a.paymentDueDay != null && ` · vence dia ${a.paymentDueDay}`}
-                  </p>
-                )}
                 {isBankAccount(a.type) && (a.agency || a.accountNumber) && (
                   <p className="text-xs text-muted-foreground">
                     {a.agency && `Ag. ${a.agency}`}
@@ -350,53 +307,6 @@ export function AccountsPage() {
                 onChange={(e) => setOpeningBalance(e.target.value)}
               />
             </div>
-
-            {isCard(type) && (
-              <div className="space-y-4 rounded-md border border-border/60 p-3">
-                <p className="text-sm font-medium">Cartão de crédito</p>
-                <div className="space-y-1.5">
-                  <Label htmlFor="acc-limit">Limite do cartão</Label>
-                  <CurrencyInput
-                    id="acc-limit"
-                    placeholder="Ex.: 5000,00"
-                    value={creditLimit}
-                    onChange={(e) => setCreditLimit(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="acc-closing">Fechamento (dia)</Label>
-                    <Input
-                      id="acc-closing"
-                      inputMode="numeric"
-                      placeholder="Ex.: 28"
-                      value={statementClosingDay}
-                      onChange={(e) => setStatementClosingDay(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="acc-due">Vencimento (dia)</Label>
-                    <Input
-                      id="acc-due"
-                      inputMode="numeric"
-                      placeholder="Ex.: 5"
-                      value={paymentDueDay}
-                      onChange={(e) => setPaymentDueDay(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="acc-late">Juros por atraso (% a.m.)</Label>
-                  <Input
-                    id="acc-late"
-                    inputMode="decimal"
-                    placeholder="Ex.: 8,99"
-                    value={lateInterestRate}
-                    onChange={(e) => setLateInterestRate(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
 
             {isBankAccount(type) && (
               <div className="space-y-4 rounded-md border border-border/60 p-3">

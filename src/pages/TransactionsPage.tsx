@@ -29,7 +29,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
 import { useAuth } from '@/auth/AuthProvider';
-import { useLiveAccounts, useLiveCategories, useLiveTransactions } from '@/hooks/useLiveData';
+import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTransactions } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
 import { deleteTransactionLocal, dismissDuplicateLocal, payTransactionLocal } from '@/sync/mutations';
@@ -55,6 +55,7 @@ export function TransactionsPage() {
   const { activeId } = useWorkspace();
   const { user } = useAuth();
   const accounts = useLiveAccounts(activeId) ?? [];
+  const cards = useLiveCards(activeId) ?? [];
   const categories = useLiveCategories(activeId) ?? [];
   const { hidden } = usePrivacy();
   const { syncNow } = useSync();
@@ -93,7 +94,15 @@ export function TransactionsPage() {
 
   const ownerName = user?.name?.trim() || 'Você';
 
-  const accMap = useMemo(() => new Map(accounts.map((a) => [a.key, a.name])), [accounts]);
+  // Nome por origem: contas + cartões (compras de cartão mostram o nome do cartão).
+  const accMap = useMemo(
+    () =>
+      new Map<string, string>([
+        ...accounts.map((a) => [a.key, a.name] as [string, string]),
+        ...cards.map((c) => [c.key, c.name] as [string, string]),
+      ]),
+    [accounts, cards],
+  );
   const catMap = useMemo(() => new Map(categories.map((c) => [c.key, c])), [categories]);
   const dupes = useMemo(() => detectDuplicates(txs), [txs]);
 
@@ -328,7 +337,7 @@ export function TransactionsPage() {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {formatDate(t.date)} · {accMap.get(t.accountId) ?? '—'}
+                      {formatDate(t.date)} · {accMap.get(t.accountId ?? t.creditCardId ?? '') ?? '—'}
                       {cat ? ` · ${cat.name}` : ''}
                       {t.shared ? ` · ${paidCount}/${peopleCount} pagaram` : ''}
                     </p>
@@ -425,6 +434,7 @@ export function TransactionsPage() {
             onClose={() => setOpened(false)}
             workspaceId={activeId}
             accounts={accounts}
+            cards={cards}
             categories={categories}
             editing={editing}
           />

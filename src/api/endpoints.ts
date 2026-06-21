@@ -8,6 +8,7 @@ import type {
   Category,
   ConsistencyFinding,
   ConsistencyKind,
+  CreditCard,
   CreditCardInvoice,
   DashboardSummary,
   Forecast,
@@ -26,6 +27,7 @@ import type {
   RecurrenceFrequency,
   RecurringTransaction,
   Transaction,
+  TxShare,
   User,
   Workspace,
   WorkspaceSettings,
@@ -38,6 +40,8 @@ export const authApi = {
     api.post<AuthResponse>('/api/auth/register', body, false),
   login: (body: { email: string; password: string }) =>
     api.post<AuthResponse>('/api/auth/login', body, false),
+  google: (body: { credential: string }) =>
+    api.post<AuthResponse>('/api/auth/google', body, false),
   me: () => api.get<{ user: User }>('/api/auth/me'),
   updateProfile: (body: ProfileUpdateInput) =>
     api.patch<{ user: User }>('/api/auth/me', body),
@@ -80,6 +84,16 @@ export const accountApi = {
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/accounts/${id}`)),
 };
 
+// ---- Credit cards (online) ----
+export const cardApi = {
+  list: (ws: string) => api.get<{ cards: CreditCard[] }>(wsPath(ws, '/cards')),
+  create: (ws: string, body: Partial<CreditCard> & { name: string }) =>
+    api.post<{ card: CreditCard }>(wsPath(ws, '/cards'), body),
+  update: (ws: string, id: string, body: Partial<CreditCard>) =>
+    api.patch<{ card: CreditCard }>(wsPath(ws, `/cards/${id}`), body),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/cards/${id}`)),
+};
+
 // ---- Institutions / bancos (online, catálogo) ----
 export const institutionApi = {
   list: (ws: string) => api.get<{ institutions: Institution[] }>(wsPath(ws, '/institutions')),
@@ -111,6 +125,17 @@ export const transferApi = {
   ) => api.post(wsPath(ws, '/transactions/transfer'), body),
 };
 
+// ---- Transações (online, edição pontual: ex. data de uma parcela) ----
+export interface TransactionUpdateInput {
+  date?: string; // ISO
+  dueDate?: string | null; // ISO
+}
+
+export const transactionApi = {
+  update: (ws: string, id: string, body: TransactionUpdateInput) =>
+    api.patch<{ transaction: Transaction }>(wsPath(ws, `/transactions/${id}`), body),
+};
+
 // ---- Payables / analytics (online, leitura) ----
 export const analyticsApi = {
   payables: (ws: string, params: { kind?: 'payable' | 'receivable'; overdue?: boolean } = {}) => {
@@ -128,6 +153,7 @@ export const analyticsApi = {
 export interface PullResponse {
   serverTime: string;
   accounts: Account[];
+  creditCards: CreditCard[];
   categories: Category[];
   transactions: Transaction[];
 }
@@ -215,12 +241,21 @@ export const recurringApi = {
 
 // ---- Parcelamentos (online) ----
 export interface InstallmentInput {
-  accountId: string;
+  // Dono das parcelas: conta OU cartão (exatamente um).
+  accountId?: string;
+  creditCardId?: string;
   description: string;
   totalAmount: number;
   installments: number;
+  /** Parcela em que o parcelamento já se encontra (1 = compra nova). */
+  startInstallment?: number;
+  /** Vencimento da parcela inicial (startInstallment). */
   firstDueDate: string;
   categoryId?: string | null;
+  /** Divisão entre pessoas. Inclui o dono (owner: true). Vazio = sem divisão. */
+  shares?: TxShare[] | null;
+  /** Total de pessoas no rateio (default = nº de participantes). */
+  shareCount?: number | null;
 }
 
 export const installmentApi = {
@@ -234,9 +269,9 @@ export const installmentApi = {
 
 // ---- Faturas de cartão (online) ----
 export const invoiceApi = {
-  list: (ws: string, params: { accountId?: string; status?: InvoiceStatus } = {}) => {
+  list: (ws: string, params: { creditCardId?: string; status?: InvoiceStatus } = {}) => {
     const q = new URLSearchParams();
-    if (params.accountId) q.set('accountId', params.accountId);
+    if (params.creditCardId) q.set('creditCardId', params.creditCardId);
     if (params.status) q.set('status', params.status);
     const qs = q.toString();
     return api.get<{ invoices: CreditCardInvoice[] }>(

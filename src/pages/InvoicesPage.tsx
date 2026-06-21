@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
-import { useLiveAccounts } from '@/hooks/useLiveData';
+import { useLiveAccounts, useLiveCards } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { invoiceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
@@ -38,13 +38,14 @@ export function InvoicesPage() {
   const { hidden } = usePrivacy();
   const qc = useQueryClient();
   const accounts = useLiveAccounts(activeId) ?? [];
-  const accountName = useMemo(() => {
+  const cards = useLiveCards(activeId) ?? [];
+  const cardName = useMemo(() => {
     const m = new Map<string, string>();
-    for (const a of accounts) m.set(a.id ?? a.key, a.name);
+    for (const c of cards) m.set(c.id ?? c.key, c.name);
     return m;
-  }, [accounts]);
-  // contas que podem pagar a fatura (não-cartão)
-  const payAccounts = accounts.filter((a) => a.type !== 'CREDIT_CARD');
+  }, [cards]);
+  // qualquer conta pode pagar a fatura (cartões não são contas)
+  const payAccounts = accounts;
 
   const [detailId, setDetailId] = useState<string | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -100,7 +101,7 @@ export function InvoicesPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <Receipt className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <p className="truncate font-medium">{accountName.get(inv.accountId) ?? 'Cartão'}</p>
+                    <p className="truncate font-medium">{cardName.get(inv.creditCardId) ?? 'Cartão'}</p>
                     <Badge variant={st.variant}>{st.label}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -191,7 +192,7 @@ function InvoiceDetail({
     <Dialog open={!!invoiceId} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{inv?.account?.name ?? 'Fatura'}</DialogTitle>
+          <DialogTitle>{inv?.creditCard?.name ?? 'Fatura'}</DialogTitle>
         </DialogHeader>
         {isLoading || !inv ? (
           <div className="flex justify-center py-10">

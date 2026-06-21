@@ -174,7 +174,7 @@ export function ConsistencyCheckModal({ opened, onClose, workspaceId, transactio
                         <div className="min-w-0">
                           <p className="truncate text-xs font-medium">{t.description}</p>
                           <p className="text-[11px] text-muted-foreground">
-                            {formatDate(t.date)} · {accMap.get(t.accountId) ?? '—'} ·{' '}
+                            {formatDate(t.date)} · {accMap.get(t.accountId ?? t.creditCardId ?? '') ?? '—'} ·{' '}
                             {formatMoney(Math.abs(Number(t.amount)))}
                           </p>
                         </div>

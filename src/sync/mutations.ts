@@ -2,7 +2,9 @@ import { db, newClientId, nowIso, type LocalTransaction, type SyncEntity, type S
 import type { TransactionStatus, TransactionType, TxShare } from '../api/types';
 
 export interface TxInput {
-  accountId: string; // key local da conta (= id do servidor p/ contas sincronizadas)
+  // Dono: conta OU cartão (key local). Exatamente um preenchido.
+  accountId?: string | null;
+  creditCardId?: string | null;
   type: Exclude<TransactionType, 'TRANSFER'>;
   status?: TransactionStatus;
   amount: number;
@@ -34,7 +36,8 @@ export async function createTransactionLocal(workspaceId: string, input: TxInput
     id: null,
     clientId,
     workspaceId,
-    accountId: input.accountId,
+    accountId: input.accountId ?? null,
+    creditCardId: input.creditCardId ?? null,
     type: input.type,
     status,
     amount: String(input.amount),
@@ -47,6 +50,7 @@ export async function createTransactionLocal(workspaceId: string, input: TxInput
     paidAt: status === 'COMPLETED' ? input.date : null,
     transferId: null,
     counterAccountId: null,
+    counterCreditCardId: null,
     duplicateDismissed: input.duplicateDismissed ?? false,
     shared: input.shared ?? false,
     shareCount: input.shareCount ?? null,
@@ -67,7 +71,8 @@ export async function updateTransactionLocal(key: string, patch: Partial<TxInput
   if (!row) return;
   const next: LocalTransaction = {
     ...row,
-    ...(patch.accountId !== undefined ? { accountId: patch.accountId } : {}),
+    ...(patch.accountId !== undefined ? { accountId: patch.accountId, creditCardId: null } : {}),
+    ...(patch.creditCardId !== undefined ? { creditCardId: patch.creditCardId, accountId: null } : {}),
     ...(patch.type !== undefined ? { type: patch.type } : {}),
     ...(patch.status !== undefined ? { status: patch.status } : {}),
     ...(patch.amount !== undefined ? { amount: String(patch.amount) } : {}),

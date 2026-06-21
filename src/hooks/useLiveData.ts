@@ -1,5 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type LocalAccount, type LocalInstitution, type LocalTransaction } from '../db/dexie';
+import {
+  db,
+  type LocalAccount,
+  type LocalCreditCard,
+  type LocalInstitution,
+  type LocalTransaction,
+} from '../db/dexie';
 import { toCents } from '../lib/format';
 
 /** Contas ativas (não arquivadas/excluídas) do workspace, ordenadas. */
@@ -11,6 +17,35 @@ export function useLiveAccounts(ws: string | null): LocalAccount[] | undefined {
       .filter((a) => !a.deletedAt && !a.archived)
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
   }, [ws]);
+}
+
+/** Cartões de crédito ativos do workspace, ordenados. */
+export function useLiveCards(ws: string | null): LocalCreditCard[] | undefined {
+  return useLiveQuery(async () => {
+    if (!ws) return [];
+    const rows = await db.creditCards.where('workspaceId').equals(ws).toArray();
+    return rows
+      .filter((c) => !c.deletedAt && !c.archived)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  }, [ws]);
+}
+
+/**
+ * "Usado" por cartão (offline): Σ compras EXPENSE não pagas. Como o front não
+ * tem o status da fatura localmente, aproxima por todas as EXPENSE do cartão.
+ */
+export function useCardsUsed(ws: string | null): Map<string, number> {
+  const used = useLiveQuery(async () => {
+    if (!ws) return new Map<string, number>();
+    const txs = await db.transactions.where('workspaceId').equals(ws).toArray();
+    const cents = new Map<string, number>();
+    for (const t of txs) {
+      if (t.deletedAt || !t.creditCardId || t.type !== 'EXPENSE') continue;
+      cents.set(t.creditCardId, (cents.get(t.creditCardId) ?? 0) + toCents(t.amount));
+    }
+    return cents;
+  }, [ws]);
+  return used ?? new Map<string, number>();
 }
 
 /**
@@ -67,6 +102,7 @@ export function computeBalances(accounts: LocalAccount[], txs: LocalTransaction[
 
   for (const t of txs) {
     if (t.deletedAt || t.status !== 'COMPLETED') continue;
+    if (!t.accountId) continue; // compra de cartão não afeta saldo de conta
     const base = cents.get(t.accountId);
     if (base === undefined) continue;
     const amt = toCents(t.amount);

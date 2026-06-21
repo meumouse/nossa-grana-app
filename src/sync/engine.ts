@@ -1,6 +1,6 @@
 import { db } from '../db/dexie';
 import { institutionApi, syncApi } from '../api/endpoints';
-import type { Account, Category, Transaction } from '../api/types';
+import type { Account, Category, CreditCard, Transaction } from '../api/types';
 
 const META_PULL = (ws: string) => `pull:${ws}`;
 
@@ -16,6 +16,11 @@ async function setWatermark(ws: string, value: string): Promise<void> {
 async function accountServerRef(key: string): Promise<string> {
   const acc = await db.accounts.get(key);
   return acc?.id ?? key;
+}
+/** Idem para cartão. */
+async function cardServerRef(key: string): Promise<string> {
+  const card = await db.creditCards.get(key);
+  return card?.id ?? key;
 }
 async function categoryServerRef(key: string | null): Promise<string | null> {
   if (!key) return null;
@@ -42,7 +47,8 @@ async function pushOutbox(ws: string): Promise<number> {
     transactions.push({
       clientId: row.clientId,
       data: {
-        accountId: await accountServerRef(row.accountId),
+        accountId: row.accountId ? await accountServerRef(row.accountId) : null,
+        creditCardId: row.creditCardId ? await cardServerRef(row.creditCardId) : null,
         type: row.type,
         status: row.status,
         amount: Number(row.amount),
@@ -61,7 +67,7 @@ async function pushOutbox(ws: string): Promise<number> {
     });
   }
 
-  const res = await syncApi.push(ws, { accounts: [], categories: [], transactions });
+  const res = await syncApi.push(ws, { accounts: [], creditCards: [], categories: [], transactions });
 
   // Aplica o idMap (clientId -> id do servidor) nas linhas locais.
   for (const { clientId, id } of res.idMap) {
@@ -94,10 +100,6 @@ async function putAccount(a: Account): Promise<void> {
     includeInTotal: a.includeInTotal,
     archived: a.archived,
     sortOrder: a.sortOrder,
-    creditLimit: a.creditLimit,
-    statementClosingDay: a.statementClosingDay,
-    paymentDueDay: a.paymentDueDay,
-    lateInterestRate: a.lateInterestRate,
     agency: a.agency ?? null,
     accountNumber: a.accountNumber ?? null,
     accountDigit: a.accountDigit ?? null,
@@ -105,6 +107,33 @@ async function putAccount(a: Account): Promise<void> {
     overdraftInterestRate: a.overdraftInterestRate,
     updatedAt: a.updatedAt,
     deletedAt: a.deletedAt,
+  });
+}
+
+async function putCreditCard(c: CreditCard): Promise<void> {
+  let key = c.id;
+  if (c.clientId) {
+    const ex = await db.creditCards.where('clientId').equals(c.clientId).first();
+    if (ex) key = ex.key;
+  }
+  await db.creditCards.put({
+    key,
+    id: c.id,
+    clientId: c.clientId ?? key,
+    workspaceId: c.workspaceId,
+    name: c.name,
+    currency: c.currency,
+    institutionId: c.institutionId ?? null,
+    iconColor: c.iconColor,
+    archived: c.archived,
+    sortOrder: c.sortOrder,
+    creditLimit: c.creditLimit,
+    statementClosingDay: c.statementClosingDay,
+    paymentDueDay: c.paymentDueDay,
+    lateInterestRate: c.lateInterestRate,
+    paymentAccountId: c.paymentAccountId ?? null,
+    updatedAt: c.updatedAt,
+    deletedAt: c.deletedAt,
   });
 }
 
@@ -144,6 +173,7 @@ async function putTransaction(t: Transaction): Promise<void> {
     clientId: t.clientId ?? key,
     workspaceId: t.workspaceId,
     accountId: t.accountId,
+    creditCardId: t.creditCardId,
     type: t.type,
     status: t.status,
     amount: t.amount,
@@ -156,6 +186,7 @@ async function putTransaction(t: Transaction): Promise<void> {
     paidAt: t.paidAt,
     transferId: t.transferId,
     counterAccountId: t.counterAccountId,
+    counterCreditCardId: t.counterCreditCardId,
     duplicateDismissed: t.duplicateDismissed ?? false,
     shared: t.shared ?? false,
     shareCount: t.shareCount ?? null,
@@ -169,14 +200,20 @@ async function pullDelta(ws: string): Promise<number> {
   const since = await getWatermark(ws);
   const res = await syncApi.pull(ws, since);
 
-  await db.transaction('rw', db.accounts, db.categories, db.transactions, db.meta, async () => {
+  await db.transaction('rw', db.accounts, db.creditCards, db.categories, db.transactions, db.meta, async () => {
     for (const a of res.accounts) await putAccount(a);
+    for (const c of res.creditCards) await putCreditCard(c);
     for (const c of res.categories) await putCategory(c);
     for (const t of res.transactions) await putTransaction(t);
     await setWatermark(ws, res.serverTime);
   });
 
-  return res.accounts.length + res.categories.length + res.transactions.length;
+  return (
+    res.accounts.length +
+    res.creditCards.length +
+    res.categories.length +
+    res.transactions.length
+  );
 }
 
 /**

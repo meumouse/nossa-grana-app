@@ -13,6 +13,7 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AccountsPage } from './pages/AccountsPage';
+import { CardsPage } from './pages/CardsPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { PayablesPage } from './pages/PayablesPage';
 import { BudgetsPage } from './pages/BudgetsPage';
@@ -68,6 +69,7 @@ function AppRoutes() {
       <Route element={<AuthedShell />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/cards" element={<CardsPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/payables" element={<PayablesPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />

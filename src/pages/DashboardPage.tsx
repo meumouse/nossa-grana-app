@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
-import { useLiveAccounts, useLiveCategories, useLiveTransactions, useBalances } from '@/hooks/useLiveData';
+import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTransactions, useBalances } from '@/hooks/useLiveData';
 import { useAuth } from '@/auth/AuthProvider';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
@@ -100,6 +100,7 @@ export function DashboardPage() {
   const { activeId, active } = useWorkspace();
   const { user } = useAuth();
   const accounts = useLiveAccounts(activeId) ?? [];
+  const cards = useLiveCards(activeId) ?? [];
   const categories = useLiveCategories(activeId) ?? [];
   const balances = useBalances(activeId);
   const txs = useLiveTransactions(activeId) ?? [];
@@ -198,7 +199,14 @@ export function DashboardPage() {
   const expenseShare = stats.incomeCents > 0 ? Math.round((stats.expenseCents / stats.incomeCents) * 100) : 0;
 
   const recent = txs.slice(0, 6);
-  const accMap = useMemo(() => new Map(accounts.map((a) => [a.key, a.name])), [accounts]);
+  const accMap = useMemo(
+    () =>
+      new Map<string, string>([
+        ...accounts.map((a) => [a.key, a.name] as [string, string]),
+        ...cards.map((c) => [c.key, c.name] as [string, string]),
+      ]),
+    [accounts, cards],
+  );
   const topAccounts = useMemo(
     () =>
       [...accounts]
@@ -401,7 +409,7 @@ export function DashboardPage() {
                         <div className="min-w-0">
                           <p className="truncate font-medium">{t.description}</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatDate(t.date)} · {accMap.get(t.accountId) ?? '—'}
+                            {formatDate(t.date)} · {accMap.get(t.accountId ?? t.creditCardId ?? '') ?? '—'}
                           </p>
                         </div>
                       </div>

@@ -67,6 +67,7 @@ const LINKS = [
   { to: '/', label: 'Início', icon: LayoutDashboard },
   { to: '/transactions', label: 'Extrato', icon: ArrowLeftRight },
   { to: '/accounts', label: 'Contas', icon: Wallet },
+  { to: '/cards', label: 'Cartões', icon: CreditCard },
   { to: '/payables', label: 'A pagar/receber', icon: CalendarClock },
   { to: '/budgets', label: 'Orçamentos', icon: PiggyBank },
   { to: '/recurring', label: 'Recorrências', icon: RecurringIcon },

@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/sonner';
-import type { LocalAccount, LocalCategory, LocalTransaction } from '@/db/dexie';
+import type { LocalAccount, LocalCreditCard, LocalCategory, LocalTransaction } from '@/db/dexie';
 import { createTransactionLocal, updateTransactionLocal } from '@/sync/mutations';
 import { useSync } from '@/sync/SyncProvider';
 
@@ -23,9 +23,14 @@ interface Props {
   onClose: () => void;
   workspaceId: string;
   accounts: LocalAccount[];
+  cards?: LocalCreditCard[];
   categories: LocalCategory[];
   editing?: LocalTransaction | null;
 }
+
+// Valor do seletor de origem codifica conta vs cartão ("acc:<key>" | "card:<key>").
+const accVal = (key: string) => `acc:${key}`;
+const cardVal = (key: string) => `card:${key}`;
 
 function dateToInput(d: Date): string {
   const y = d.getFullYear();
@@ -36,12 +41,21 @@ function dateToInput(d: Date): string {
 
 type Kind = 'INCOME' | 'EXPENSE';
 
-export function TransactionFormModal({ opened, onClose, workspaceId, accounts, categories, editing }: Props) {
+export function TransactionFormModal({
+  opened,
+  onClose,
+  workspaceId,
+  accounts,
+  cards = [],
+  categories,
+  editing,
+}: Props) {
   const { syncNow } = useSync();
   const [type, setType] = useState<Kind>('EXPENSE');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [accountId, setAccountId] = useState('');
+  // Origem: conta ou cartão, codificada em "acc:<key>" / "card:<key>".
+  const [source, setSource] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [date, setDate] = useState<Date>(new Date());
   const [pending, setPending] = useState(false);
@@ -52,7 +66,13 @@ export function TransactionFormModal({ opened, onClose, workspaceId, accounts, c
       setType(editing.type === 'INCOME' ? 'INCOME' : 'EXPENSE');
       setAmount(String(editing.amount));
       setDescription(editing.description);
-      setAccountId(editing.accountId);
+      setSource(
+        editing.creditCardId
+          ? cardVal(editing.creditCardId)
+          : editing.accountId
+            ? accVal(editing.accountId)
+            : '',
+      );
       setCategoryId(editing.categoryId ?? '');
       setDate(new Date(editing.date));
       setPending(editing.status === 'PENDING');
@@ -60,22 +80,25 @@ export function TransactionFormModal({ opened, onClose, workspaceId, accounts, c
       setType('EXPENSE');
       setAmount('');
       setDescription('');
-      setAccountId(accounts[0]?.key ?? '');
+      setSource(accounts[0] ? accVal(accounts[0].key) : cards[0] ? cardVal(cards[0].key) : '');
       setCategoryId('');
       setDate(new Date());
       setPending(false);
     }
-  }, [opened, editing, accounts]);
+  }, [opened, editing, accounts, cards]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = Number(amount.replace(',', '.'));
     if (!(value > 0)) return toast.error('Informe um valor maior que zero');
     if (!description.trim()) return toast.error('Descreva o lançamento');
-    if (!accountId) return toast.error('Escolha a conta');
+    if (!source) return toast.error('Escolha a conta ou o cartão');
 
+    const isCard = source.startsWith('card:');
+    const ownerKey = source.slice(source.indexOf(':') + 1);
     const payload = {
-      accountId,
+      accountId: isCard ? null : ownerKey,
+      creditCardId: isCard ? ownerKey : null,
       type,
       status: pending ? ('PENDING' as const) : ('COMPLETED' as const),
       amount: value,
@@ -127,15 +150,20 @@ export function TransactionFormModal({ opened, onClose, workspaceId, accounts, c
           </div>
 
           <div className="space-y-1.5">
-            <Label>Conta</Label>
-            <Select value={accountId} onValueChange={setAccountId}>
+            <Label>Conta ou cartão</Label>
+            <Select value={source} onValueChange={setSource}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione a conta" />
+                <SelectValue placeholder="Selecione a conta ou o cartão" />
               </SelectTrigger>
               <SelectContent>
                 {accounts.map((a) => (
-                  <SelectItem key={a.key} value={a.key}>
+                  <SelectItem key={`acc-${a.key}`} value={accVal(a.key)}>
                     {a.name}
+                  </SelectItem>
+                ))}
+                {cards.map((c) => (
+                  <SelectItem key={`card-${c.key}`} value={cardVal(c.key)}>
+                    {c.name} (cartão)
                   </SelectItem>
                 ))}
               </SelectContent>
