@@ -64,6 +64,11 @@ export interface WorkspaceSettings {
   llmProvider: string | null;
   llmModel: string | null;
   llmApiKeySet: boolean;
+  // Cache da última busca de modelos (persistida no banco): popula o seletor
+  // após recarregar sem rebuscar na API.
+  llmModels?: LlmModelInfo[] | null;
+  llmModelsProvider?: string | null;
+  llmModelsFetchedAt?: string | null;
 }
 
 export interface WorkspaceSettingsInput {

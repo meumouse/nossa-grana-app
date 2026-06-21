@@ -58,7 +58,7 @@ export const workspaceApi = {
   // Busca via API os modelos do provider. A chave pode ir no corpo p/ testar
   // uma ainda não salva; senão o backend usa a do workspace ou a de env.
   listLlmModels: (ws: string, body: { provider?: LlmProvider; apiKey?: string }) =>
-    api.post<{ provider: LlmProvider; models: LlmModelInfo[] }>(
+    api.post<{ provider: LlmProvider; models: LlmModelInfo[]; fetchedAt: string }>(
       wsPath(ws, '/settings/llm/models'),
       body,
     ),
