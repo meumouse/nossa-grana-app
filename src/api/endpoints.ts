@@ -11,6 +11,8 @@ import type {
   ImportBatch,
   ImportItem,
   InstallmentPlan,
+  LlmModelInfo,
+  LlmProvider,
   InvestmentAsset,
   InvestmentPosition,
   InvestmentTransaction,
@@ -52,6 +54,13 @@ export const workspaceApi = {
     api.get<{ settings: WorkspaceSettings | null }>(wsPath(ws, '/settings')),
   updateSettings: (ws: string, body: WorkspaceSettingsInput) =>
     api.patch<{ settings: WorkspaceSettings }>(wsPath(ws, '/settings'), body),
+  // Busca via API os modelos do provider. A chave pode ir no corpo p/ testar
+  // uma ainda não salva; senão o backend usa a do workspace ou a de env.
+  listLlmModels: (ws: string, body: { provider?: LlmProvider; apiKey?: string }) =>
+    api.post<{ provider: LlmProvider; models: LlmModelInfo[] }>(
+      wsPath(ws, '/settings/llm/models'),
+      body,
+    ),
 };
 
 // ---- Accounts (online) ----

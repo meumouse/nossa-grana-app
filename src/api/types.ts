@@ -45,6 +45,15 @@ export interface Workspace {
   role: MemberRole;
 }
 
+/** Providers de LLM suportados pela importação por IA. */
+export type LlmProvider = 'openai' | 'anthropic' | 'google';
+
+/** Um modelo disponível num provider, devolvido pela busca via API. */
+export interface LlmModelInfo {
+  id: string;
+  label?: string | null;
+}
+
 export interface WorkspaceSettings {
   baseCurrency: string;
   monthStartDay: number;
@@ -63,7 +72,7 @@ export interface WorkspaceSettingsInput {
   forecastHorizon?: number;
   variableLookback?: number;
   weekStartsOnMonday?: boolean;
-  llmProvider?: 'openai';
+  llmProvider?: LlmProvider;
   llmModel?: string;
   /** Vazio limpa a chave; ausente mantém a atual. */
   llmApiKey?: string;

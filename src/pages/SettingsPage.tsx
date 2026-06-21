@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Sparkles, KeyRound, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Sparkles, KeyRound, ShieldCheck, SlidersHorizontal, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -12,10 +12,26 @@ import { toast } from '@/components/ui/sonner';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
 import { workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
-import type { WorkspaceSettingsInput } from '@/api/types';
+import type { LlmModelInfo, LlmProvider, WorkspaceSettingsInput } from '@/api/types';
 
-// Modelos OpenAI com visão (necessária p/ ler PDF/imagem de extratos).
-const MODEL_SUGGESTIONS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini'];
+// Providers suportados (o backend valida o mesmo conjunto).
+const PROVIDERS: { value: LlmProvider; label: string }[] = [
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Anthropic (Claude)' },
+  { value: 'google', label: 'Google (Gemini)' },
+];
+const PROVIDER_LABEL: Record<LlmProvider, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  google: 'Google (Gemini)',
+};
+// Sugestões iniciais por provider (até o usuário buscar a lista real via API).
+// Todos precisam suportar visão p/ ler PDF/imagem de extratos.
+const MODEL_SUGGESTIONS: Record<LlmProvider, string[]> = {
+  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini'],
+  anthropic: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  google: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+};
 const CURRENCIES = ['BRL', 'USD', 'EUR', 'GBP', 'ARS'];
 
 function handleError(err: unknown) {
@@ -48,9 +64,10 @@ export function SettingsPage() {
   const [weekStartsOnMonday, setWeekStartsOnMonday] = useState(true);
 
   // --- IA ---
-  const [provider, setProvider] = useState<'openai'>('openai');
+  const [provider, setProvider] = useState<LlmProvider>('openai');
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [models, setModels] = useState<LlmModelInfo[]>([]);
   const keyConfigured = settings?.llmApiKeySet ?? false;
 
   // Hidrata o formulário quando as settings chegam (a chave nunca volta).
@@ -61,9 +78,10 @@ export function SettingsPage() {
     setForecastHorizon(String(settings.forecastHorizon ?? 12));
     setVariableLookback(String(settings.variableLookback ?? 3));
     setWeekStartsOnMonday(settings.weekStartsOnMonday ?? true);
-    setProvider((settings.llmProvider as 'openai') || 'openai');
+    setProvider((settings.llmProvider as LlmProvider) || 'openai');
     setModel(settings.llmModel ?? '');
     setApiKey('');
+    setModels([]);
   }, [settings]);
 
   const save = useMutation({
@@ -75,6 +93,32 @@ export function SettingsPage() {
     },
     onError: handleError,
   });
+
+  // Busca via API a lista de modelos do provider. Manda a chave digitada (se
+  // houver) p/ permitir testar uma ainda não salva; senão o backend usa a do
+  // workspace ou a de env.
+  const fetchModels = useMutation({
+    mutationFn: () =>
+      workspaceApi.listLlmModels(activeId!, {
+        provider,
+        apiKey: apiKey.trim() || undefined,
+      }),
+    onSuccess: (res) => {
+      setModels(res.models);
+      toast.success(
+        res.models.length
+          ? `${res.models.length} modelo(s) encontrado(s)`
+          : 'Nenhum modelo retornado pelo provedor',
+      );
+    },
+    onError: handleError,
+  });
+
+  // Trocar de provider invalida a lista buscada (era do provider anterior).
+  const onChangeProvider = (value: LlmProvider) => {
+    setProvider(value);
+    setModels([]);
+  };
 
   const onSubmitAi = (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +150,7 @@ export function SettingsPage() {
   };
 
   const clearKey = () => {
-    if (!confirm('Remover a chave da OpenAI deste perfil?')) return;
+    if (!confirm('Remover a chave de API deste perfil?')) return;
     save.mutate({ llmApiKey: '' });
   };
 
@@ -229,8 +273,8 @@ export function SettingsPage() {
           <h2 className="text-lg font-semibold">Importação por IA</h2>
         </div>
         <p className="mb-5 text-sm text-muted-foreground">
-          Defina a chave da OpenAI e o modelo usados para ler extratos, faturas e comprovantes.
-          A chave é guardada cifrada e compartilhada pelos membros deste perfil.
+          Escolha o provedor de IA, a chave e o modelo usados para ler extratos, faturas e
+          comprovantes. A chave é guardada cifrada e compartilhada pelos membros deste perfil.
         </p>
 
         {isLoading ? (
@@ -243,41 +287,73 @@ export function SettingsPage() {
           <form onSubmit={onSubmitAi} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="provider">Provedor</Label>
-              <Select value={provider} onValueChange={(v) => setProvider(v as 'openai')} disabled={!canEdit}>
+              <Select
+                value={provider}
+                onValueChange={(v) => onChangeProvider(v as LlmProvider)}
+                disabled={!canEdit}
+              >
                 <SelectTrigger id="provider" className="w-full sm:w-64">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
+                  {PROVIDERS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="model">Modelo de LLM</Label>
-              <Input
-                id="model"
-                list="model-suggestions"
-                placeholder="gpt-4o"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                disabled={!canEdit}
-                className="w-full sm:w-64"
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  id="model"
+                  list="model-suggestions"
+                  placeholder={MODEL_SUGGESTIONS[provider][0]}
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  disabled={!canEdit}
+                  className="w-full sm:w-64"
+                />
+                {canEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fetchModels.mutate()}
+                    disabled={fetchModels.isPending}
+                  >
+                    {fetchModels.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
+                    Buscar modelos
+                  </Button>
+                )}
+              </div>
               <datalist id="model-suggestions">
-                {MODEL_SUGGESTIONS.map((m) => (
-                  <option key={m} value={m} />
+                {(models.length
+                  ? models
+                  : MODEL_SUGGESTIONS[provider].map((id) => ({ id, label: null }))
+                ).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label ?? m.id}
+                  </option>
                 ))}
               </datalist>
               <p className="text-xs text-muted-foreground">
-                Use um modelo com visão (lê PDF/imagem). Em branco usa o padrão do servidor.
+                {models.length
+                  ? `${models.length} modelo(s) do provedor — escolha um com visão (lê PDF/imagem).`
+                  : 'Use um modelo com visão (lê PDF/imagem). Clique em “Buscar modelos” para listar os do provedor pela API. Em branco usa o padrão do servidor.'}
               </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="apiKey" className="flex items-center gap-2">
                 <KeyRound className="h-4 w-4" />
-                Chave de API da OpenAI
+                Chave de API · {PROVIDER_LABEL[provider]}
                 {keyConfigured && (
                   <Badge variant="success" className="gap-1">
                     <ShieldCheck className="h-3 w-3" /> Configurada
@@ -288,7 +364,9 @@ export function SettingsPage() {
                 id="apiKey"
                 type="password"
                 autoComplete="off"
-                placeholder={keyConfigured ? '•••••••••• (deixe em branco p/ manter)' : 'sk-...'}
+                placeholder={
+                  keyConfigured ? '•••••••••• (deixe em branco p/ manter)' : 'Cole a chave de API do provedor'
+                }
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 disabled={!canEdit}
