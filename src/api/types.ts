@@ -425,6 +425,7 @@ export interface ImportItem {
   suggestedCategory: string | null;
   categoryId: string | null;
   accountId: string | null;
+  creditCardId: string | null;
   status: ImportItemStatus;
   transactionId: string | null;
   confidence: number | null;
