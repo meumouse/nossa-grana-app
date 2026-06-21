@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CreditCard, Loader2, Plus, Search, Trash2, Users, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, CreditCard, Loader2, Plus, Search, Trash2, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
@@ -18,7 +20,7 @@ import { useLiveAccounts, useLiveCategories, useLiveTransactions } from '@/hooks
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
 import { payTransactionLocal } from '@/sync/mutations';
-import { installmentApi, workspaceApi } from '@/api/endpoints';
+import { installmentApi, transactionApi, workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
 import { formatDate, formatMoney } from '@/lib/format';
 import { fireConfetti } from '@/lib/confetti';
@@ -552,6 +554,19 @@ function InstallmentDetail({
 
   const [payingId, setPayingId] = useState<string | null>(null);
 
+  // Ajusta o vencimento de uma parcela (ex.: cair em feriado/fim de semana).
+  const updateDate = useMutation({
+    mutationFn: ({ id, date }: { id: string; date: Date }) =>
+      transactionApi.update(wsId!, id, { date: date.toISOString(), dueDate: date.toISOString() }),
+    onSuccess: () => {
+      void syncNow();
+      qc.invalidateQueries({ queryKey: ['installment', wsId, planId] });
+      qc.invalidateQueries({ queryKey: ['installments', wsId] });
+      toast.success('Vencimento da parcela atualizado');
+    },
+    onError: handleError,
+  });
+
   const effectiveStatus = (t: Transaction) =>
     (t.id ? localStatusByServerId.get(t.id)?.status : undefined) ?? t.status;
 
@@ -632,10 +647,33 @@ function InstallmentDetail({
                     key={t.id}
                     className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
                   >
-                    <span>
-                      {t.installmentNumber ? `${t.installmentNumber}ª · ` : ''}
-                      {t.dueDate ? formatDate(t.dueDate) : formatDate(t.date)}
-                    </span>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {t.installmentNumber ? (
+                        <span className="text-muted-foreground">{t.installmentNumber}ª</span>
+                      ) : null}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1.5 px-2 font-normal"
+                            disabled={updateDate.isPending || !t.id}
+                          >
+                            <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            {t.dueDate ? formatDate(t.dueDate) : formatDate(t.date)}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={new Date(t.dueDate ?? t.date)}
+                            onSelect={(d) => d && t.id && updateDate.mutate({ id: t.id, date: d })}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                     <div className="flex items-center gap-2">
                       {t.shared && tShares.length > 0 && (
                         <span className="text-xs text-muted-foreground">
