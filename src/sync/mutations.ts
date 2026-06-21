@@ -103,6 +103,16 @@ export async function payTransactionLocal(key: string, paidAt = nowIso()): Promi
   });
 }
 
+/** Desfaz a efetivação: volta a transação para PENDING (conta a pagar/receber) e limpa o paidAt. */
+export async function unpayTransactionLocal(key: string): Promise<void> {
+  const row = await db.transactions.get(key);
+  if (!row) return;
+  await db.transaction('rw', db.transactions, db.outbox, async () => {
+    await db.transactions.put({ ...row, status: 'PENDING', paidAt: null, updatedAt: nowIso() });
+    await enqueue('transaction', row.clientId, 'upsert', row.workspaceId);
+  });
+}
+
 /**
  * Marca um conjunto de transações como "não é duplicata" (legítimas),
  * silenciando o alerta de possível duplicidade para o grupo.

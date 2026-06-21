@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Calendar as CalendarIcon, Check, CreditCard, Loader2, Plus, Search, Trash2, Users, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, CreditCard, Loader2, Plus, Search, Trash2, Undo2, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -16,10 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/components/ui/sonner';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
 import { useAuth } from '@/auth/AuthProvider';
-import { useLiveAccounts, useLiveCategories, useLiveTransactions } from '@/hooks/useLiveData';
+import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTransactions } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
-import { payTransactionLocal } from '@/sync/mutations';
+import { payTransactionLocal, unpayTransactionLocal } from '@/sync/mutations';
 import { installmentApi, transactionApi, workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -40,12 +40,17 @@ function ownerRow(ownerName: string): TxShare {
   return { name: ownerName, paid: true, owner: true };
 }
 
+// O seletor de origem codifica conta vs cartão ("acc:<id>" | "card:<id>").
+const accVal = (id: string) => `acc:${id}`;
+const cardVal = (id: string) => `card:${id}`;
+
 export function InstallmentsPage() {
   const { activeId } = useWorkspace();
   const { user } = useAuth();
   const { hidden } = usePrivacy();
   const qc = useQueryClient();
   const accounts = useLiveAccounts(activeId) ?? [];
+  const cards = (useLiveCards(activeId) ?? []).filter((c) => !c.archived);
   const categories = useLiveCategories(activeId) ?? [];
 
   const ownerName = user?.name?.trim() || 'Você';
@@ -54,7 +59,8 @@ export function InstallmentsPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [accountId, setAccountId] = useState('');
+  // Origem: conta ou cartão, codificada em "acc:<id>" / "card:<id>".
+  const [source, setSource] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
@@ -109,8 +115,11 @@ export function InstallmentsPage() {
           }
         }
       }
+      const isCard = source.startsWith('card:');
+      const ownerId = source.slice(source.indexOf(':') + 1);
       return installmentApi.create(activeId!, {
-        accountId,
+        accountId: isCard ? undefined : ownerId,
+        creditCardId: isCard ? ownerId : undefined,
         description: description.trim(),
         totalAmount: Number(totalAmount.replace(',', '.')) || 0,
         installments: Number(installments) || 2,
@@ -139,7 +148,15 @@ export function InstallmentsPage() {
   });
 
   const openNew = () => {
-    setAccountId(accounts[0]?.id ?? accounts[0]?.key ?? '');
+    const firstAcc = accounts[0];
+    const firstCard = cards[0];
+    setSource(
+      firstAcc
+        ? accVal(firstAcc.id ?? firstAcc.key)
+        : firstCard
+          ? cardVal(firstCard.id ?? firstCard.key)
+          : '',
+    );
     setCategoryId('');
     setDescription('');
     setTotalAmount('');
@@ -305,7 +322,7 @@ export function InstallmentsPage() {
             onSubmit={(e) => {
               e.preventDefault();
               if (!activeId) return;
-              if (!accountId) return toast.error('Escolha a conta');
+              if (!source) return toast.error('Escolha a conta ou o cartão');
               if (!description.trim()) return toast.error('Informe a descrição');
               if (!totalAmount.trim()) return toast.error('Informe o valor total');
               if (Number(installments) < 2) return toast.error('Mínimo de 2 parcelas');
@@ -347,15 +364,20 @@ export function InstallmentsPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Conta</Label>
-              <Select value={accountId} onValueChange={setAccountId}>
+              <Label>Conta ou cartão</Label>
+              <Select value={source} onValueChange={setSource}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione a conta" />
+                  <SelectValue placeholder="Selecione a conta ou o cartão" />
                 </SelectTrigger>
                 <SelectContent>
                   {accounts.map((a) => (
-                    <SelectItem key={a.key} value={a.id ?? a.key}>
+                    <SelectItem key={`acc-${a.key}`} value={accVal(a.id ?? a.key)}>
                       {a.name}
+                    </SelectItem>
+                  ))}
+                  {cards.map((c) => (
+                    <SelectItem key={`card-${c.key}`} value={cardVal(c.id ?? c.key)}>
+                      {c.name} (cartão)
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -553,6 +575,7 @@ function InstallmentDetail({
   }, [localTxs]);
 
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [unpayingId, setUnpayingId] = useState<string | null>(null);
 
   // Ajusta o vencimento de uma parcela (ex.: cair em feriado/fim de semana).
   const updateDate = useMutation({
@@ -597,6 +620,26 @@ function InstallmentDetail({
       toast.error('Não foi possível efetivar a parcela');
     } finally {
       setPayingId(null);
+    }
+  };
+
+  const unpayParcela = async (t: Transaction) => {
+    const local = t.id ? localStatusByServerId.get(t.id) : undefined;
+    if (!local) {
+      toast.error('Parcela ainda não sincronizada — tente novamente em instantes');
+      return;
+    }
+    setUnpayingId(t.id);
+    try {
+      await unpayTransactionLocal(local.key);
+      void syncNow();
+      await qc.invalidateQueries({ queryKey: ['installment', wsId, planId] });
+      qc.invalidateQueries({ queryKey: ['installments', wsId] });
+      toast.success('Pagamento da parcela removido');
+    } catch {
+      toast.error('Não foi possível remover o pagamento');
+    } finally {
+      setUnpayingId(null);
     }
   };
 
@@ -682,7 +725,23 @@ function InstallmentDetail({
                       )}
                       <span className="font-medium">{formatMoney(t.amount, hidden)}</span>
                       {isPaid ? (
-                        <Badge variant="success">paga</Badge>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="success">paga</Badge>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground"
+                            title="Remover pagamento"
+                            disabled={unpayingId !== null || !t.id}
+                            onClick={() => void unpayParcela(t)}
+                          >
+                            {unpayingId === t.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Undo2 className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
                       ) : (
                         <Button
                           variant="outline"
