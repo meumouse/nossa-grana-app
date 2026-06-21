@@ -151,7 +151,6 @@ export function TransactionFormModal({ opened, onClose, workspaceId, accounts, c
               <SelectContent>
                 {catOptions.map((c) => (
                   <SelectItem key={c.key} value={c.key}>
-                    {c.icon ? `${c.icon} ` : ''}
                     {c.name}
                   </SelectItem>
                 ))}

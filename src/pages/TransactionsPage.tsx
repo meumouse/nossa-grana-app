@@ -64,7 +64,7 @@ export function TransactionsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Lançamentos</h1>
+        <h1 className="text-xl font-bold">Extrato</h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setImportOpened(true)}>
             <Sparkles className="h-4 w-4" />
@@ -72,7 +72,7 @@ export function TransactionsPage() {
           </Button>
           <Button onClick={openNew}>
             <Plus className="h-4 w-4" />
-            Novo
+            Novo lançamento
           </Button>
         </div>
       </div>
@@ -97,10 +97,7 @@ export function TransactionsPage() {
               <Card key={t.key} className="flex items-center justify-between gap-2 p-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="truncate font-medium">
-                      {cat?.icon ? `${cat.icon} ` : ''}
-                      {t.description}
-                    </span>
+                    <span className="truncate font-medium">{t.description}</span>
                     {t.status === 'PENDING' && <Badge variant="warning">pendente</Badge>}
                     {!t.id && <Badge variant="muted">na fila</Badge>}
                   </div>

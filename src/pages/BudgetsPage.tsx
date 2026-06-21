@@ -161,7 +161,6 @@ export function BudgetsPage() {
                   <SelectItem value={GLOBAL}>Geral (todas as despesas)</SelectItem>
                   {expenseCats.map((c) => (
                     <SelectItem key={c.key} value={c.id ?? c.key}>
-                      {c.icon ? `${c.icon} ` : ''}
                       {c.name}
                     </SelectItem>
                   ))}
@@ -207,10 +206,7 @@ function BudgetCard({
   return (
     <Card className="space-y-2 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="font-medium">
-          {budget.category?.icon ? `${budget.category.icon} ` : ''}
-          {name}
-        </p>
+        <p className="font-medium">{name}</p>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
             {formatMoney(budget.spent, hidden)} / {formatMoney(budget.amount, hidden)}

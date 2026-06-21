@@ -231,7 +231,6 @@ export function RecurringPage() {
                   <SelectItem value="none">Sem categoria</SelectItem>
                   {catOptions.map((c) => (
                     <SelectItem key={c.key} value={c.id ?? c.key}>
-                      {c.icon ? `${c.icon} ` : ''}
                       {c.name}
                     </SelectItem>
                   ))}

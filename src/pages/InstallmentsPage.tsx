@@ -224,7 +224,6 @@ export function InstallmentsPage() {
                   <SelectItem value="none">Sem categoria</SelectItem>
                   {expenseCats.map((c) => (
                     <SelectItem key={c.key} value={c.id ?? c.key}>
-                      {c.icon ? `${c.icon} ` : ''}
                       {c.name}
                     </SelectItem>
                   ))}
