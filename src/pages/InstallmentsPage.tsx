@@ -1,23 +1,28 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, CreditCard, Loader2, Plus, Search, Trash2, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
-import { useLiveAccounts, useLiveCategories } from '@/hooks/useLiveData';
+import { useAuth } from '@/auth/AuthProvider';
+import { useLiveAccounts, useLiveCategories, useLiveTransactions } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
-import { installmentApi } from '@/api/endpoints';
+import { useSync } from '@/sync/SyncProvider';
+import { payTransactionLocal } from '@/sync/mutations';
+import { installmentApi, workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
 import { formatDate, formatMoney } from '@/lib/format';
-import type { InstallmentPlan } from '@/api/types';
+import { fireConfetti } from '@/lib/confetti';
+import type { InstallmentPlan, Transaction, TxShare } from '@/api/types';
 
 function handleError(err: unknown) {
   toast.error(
@@ -29,12 +34,19 @@ function handleError(err: unknown) {
   );
 }
 
+function ownerRow(ownerName: string): TxShare {
+  return { name: ownerName, paid: true, owner: true };
+}
+
 export function InstallmentsPage() {
   const { activeId } = useWorkspace();
+  const { user } = useAuth();
   const { hidden } = usePrivacy();
   const qc = useQueryClient();
   const accounts = useLiveAccounts(activeId) ?? [];
   const categories = useLiveCategories(activeId) ?? [];
+
+  const ownerName = user?.name?.trim() || 'Você';
 
   const [opened, setOpened] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -45,7 +57,27 @@ export function InstallmentsPage() {
   const [description, setDescription] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [installments, setInstallments] = useState('2');
+  const [startInstallment, setStartInstallment] = useState('1');
   const [firstDueDate, setFirstDueDate] = useState<Date>(() => new Date());
+
+  // Divisão entre pessoas (rateio). shares[0] é sempre o dono.
+  const [shares, setShares] = useState<TxShare[]>([ownerRow(ownerName)]);
+  const [newName, setNewName] = useState('');
+  const [shareCount, setShareCount] = useState(1);
+
+  // Pessoas cadastradas (settings) p/ autocomplete no rateio.
+  const [contacts, setContacts] = useState<string[]>([]);
+  useEffect(() => {
+    if (!activeId) return;
+    let live = true;
+    workspaceApi
+      .getSettings(activeId)
+      .then((r) => live && setContacts(r.settings?.sharedContacts ?? []))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [activeId]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['installments', activeId],
@@ -55,16 +87,38 @@ export function InstallmentsPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['installments', activeId] });
 
+  const others = shares.filter((s) => !s.owner);
+  const isShared = others.length > 0;
+  const peopleCount = Math.max(shareCount, shares.length);
+
   const create = useMutation({
-    mutationFn: () =>
-      installmentApi.create(activeId!, {
+    mutationFn: async () => {
+      // Cadastra nomes novos nas settings (best-effort, p/ autocomplete futuro).
+      if (isShared) {
+        const known = new Set(contacts.map((c) => c.toLowerCase()));
+        const fresh = others.map((s) => s.name).filter((n) => !known.has(n.toLowerCase()));
+        if (fresh.length > 0) {
+          const merged = Array.from(new Set([...contacts, ...fresh]));
+          try {
+            await workspaceApi.updateSettings(activeId!, { sharedContacts: merged });
+            setContacts(merged);
+          } catch {
+            // não bloqueia a criação do parcelamento.
+          }
+        }
+      }
+      return installmentApi.create(activeId!, {
         accountId,
         description: description.trim(),
         totalAmount: Number(totalAmount.replace(',', '.')) || 0,
         installments: Number(installments) || 2,
+        startInstallment: Number(startInstallment) || 1,
         firstDueDate: firstDueDate.toISOString(),
         categoryId: categoryId || null,
-      }),
+        shares: isShared ? shares : null,
+        shareCount: isShared ? peopleCount : null,
+      });
+    },
     onSuccess: () => {
       setOpened(false);
       invalidate();
@@ -88,9 +142,42 @@ export function InstallmentsPage() {
     setDescription('');
     setTotalAmount('');
     setInstallments('2');
+    setStartInstallment('1');
     setFirstDueDate(new Date());
+    setShares([ownerRow(ownerName)]);
+    setShareCount(1);
+    setNewName('');
     setOpened(true);
   };
+
+  const addPerson = (raw: string) => {
+    const name = raw.trim();
+    if (!name) return;
+    if (shares.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+      toast.error('Essa pessoa já está no rateio');
+      return;
+    }
+    setShares((prev) => {
+      const next = [...prev, { name, paid: false }];
+      setShareCount((c) => Math.max(c, next.length));
+      return next;
+    });
+    setNewName('');
+  };
+
+  const removePerson = (i: number) =>
+    setShares((prev) => prev.filter((_, idx) => idx !== i));
+
+  const togglePaid = (i: number) =>
+    setShares((prev) => prev.map((s, idx) => (idx === i ? { ...s, paid: !s.paid } : s)));
+
+  const shareSuggestions = contacts.filter(
+    (c) => !shares.some((s) => s.name.toLowerCase() === c.toLowerCase()),
+  );
+  const perPerson =
+    isShared && peopleCount > 0
+      ? (Number(totalAmount.replace(',', '.')) || 0) / peopleCount
+      : null;
 
   const expenseCats = categories.filter((c) => c.kind === 'EXPENSE');
   const allItems = data?.items ?? [];
@@ -220,6 +307,8 @@ export function InstallmentsPage() {
               if (!description.trim()) return toast.error('Informe a descrição');
               if (!totalAmount.trim()) return toast.error('Informe o valor total');
               if (Number(installments) < 2) return toast.error('Mínimo de 2 parcelas');
+              if (Number(startInstallment) > Number(installments))
+                return toast.error('A parcela atual não pode ser maior que o total');
               create.mutate();
             }}
             className="space-y-4"
@@ -286,10 +375,32 @@ export function InstallmentsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>1º vencimento</Label>
-              <DatePicker value={firstDueDate} onChange={(d) => d && setFirstDueDate(d)} />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="ins-start">Parcela atual</Label>
+                <Input
+                  id="ins-start"
+                  type="number"
+                  min={1}
+                  max={Number(installments) || 1}
+                  value={startInstallment}
+                  onChange={(e) => setStartInstallment(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>
+                  {Number(startInstallment) > 1
+                    ? `Vencimento da ${Number(startInstallment)}ª`
+                    : '1º vencimento'}
+                </Label>
+                <DatePicker value={firstDueDate} onChange={(d) => d && setFirstDueDate(d)} />
+              </div>
             </div>
+            {Number(startInstallment) > 1 && (
+              <p className="text-xs text-muted-foreground">
+                As parcelas 1 a {Number(startInstallment) - 1} serão registradas como pagas.
+              </p>
+            )}
             {totalAmount.trim() && Number(installments) >= 2 && (
               <p className="text-xs text-muted-foreground">
                 {installments}x de aprox.{' '}
@@ -299,6 +410,99 @@ export function InstallmentsPage() {
                 )}
               </p>
             )}
+
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Dividir com outras pessoas</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Cada parcela será dividida e poderá ter o pagamento marcado por pessoa.
+              </p>
+
+              <div className="space-y-2">
+                {shares.map((s, i) => (
+                  <div
+                    key={`${s.name}-${i}`}
+                    className="flex items-center justify-between gap-2 rounded-md border p-2.5"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-sm font-medium">{s.name}</span>
+                      {s.owner && <span className="text-xs text-muted-foreground">(você)</span>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                        <Switch checked={s.paid} onCheckedChange={() => togglePaid(i)} />
+                        {s.paid ? 'pago' : 'a pagar'}
+                      </label>
+                      {!s.owner && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => removePerson(i)}
+                          aria-label="Remover pessoa"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  list="installment-contacts"
+                  placeholder="Nome da pessoa"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addPerson(newName);
+                    }
+                  }}
+                />
+                <datalist id="installment-contacts">
+                  {shareSuggestions.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+                <Button type="button" variant="outline" onClick={() => addPerson(newName)}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {isShared && (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="ins-people">Total de pessoas no rateio</Label>
+                    <Input
+                      id="ins-people"
+                      type="number"
+                      min={shares.length}
+                      className="w-20"
+                      value={peopleCount}
+                      onChange={(e) =>
+                        setShareCount(Math.max(shares.length, Number(e.target.value) || shares.length))
+                      }
+                    />
+                  </div>
+                  {perPerson != null && (
+                    <p className="text-xs text-muted-foreground">
+                      Cada pessoa paga aprox.{' '}
+                      <span className="font-medium text-foreground">
+                        {formatMoney(perPerson, hidden)}
+                      </span>{' '}
+                      do total ({formatMoney(perPerson / (Number(installments) || 1), hidden)} por parcela)
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
             <Button type="submit" className="w-full" disabled={create.isPending}>
               {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Criar
@@ -328,12 +532,58 @@ function InstallmentDetail({
   hidden: boolean;
   onClose: () => void;
 }) {
+  const qc = useQueryClient();
+  const { syncNow } = useSync();
   const { data, isLoading } = useQuery({
     queryKey: ['installment', wsId, planId],
     queryFn: () => installmentApi.get(wsId!, planId!),
     enabled: !!wsId && !!planId,
   });
   const plan: InstallmentPlan | undefined = data?.plan;
+
+  // Status local (offline-first) das parcelas, mais recente que o do servidor
+  // logo após efetivar — mapeado pelo id da transação no servidor.
+  const localTxs = useLiveTransactions(wsId) ?? [];
+  const localStatusByServerId = useMemo(() => {
+    const m = new Map<string, { key: string; status: string }>();
+    for (const t of localTxs) if (t.id) m.set(t.id, { key: t.key, status: t.status });
+    return m;
+  }, [localTxs]);
+
+  const [payingId, setPayingId] = useState<string | null>(null);
+
+  const effectiveStatus = (t: Transaction) =>
+    (t.id ? localStatusByServerId.get(t.id)?.status : undefined) ?? t.status;
+
+  const pendingCount = (plan?.transactions ?? []).filter(
+    (t) => effectiveStatus(t) !== 'COMPLETED',
+  ).length;
+
+  const payParcela = async (t: Transaction) => {
+    const local = t.id ? localStatusByServerId.get(t.id) : undefined;
+    if (!local) {
+      toast.error('Parcela ainda não sincronizada — tente novamente em instantes');
+      return;
+    }
+    const isLast = pendingCount === 1; // esta é a única pendente → quita o plano
+    setPayingId(t.id);
+    try {
+      await payTransactionLocal(local.key);
+      void syncNow();
+      await qc.invalidateQueries({ queryKey: ['installment', wsId, planId] });
+      qc.invalidateQueries({ queryKey: ['installments', wsId] });
+      if (isLast) {
+        fireConfetti();
+        toast.success('🎉 Parcelamento quitado!');
+      } else {
+        toast.success('Parcela efetivada');
+      }
+    } catch {
+      toast.error('Não foi possível efetivar a parcela');
+    } finally {
+      setPayingId(null);
+    }
+  };
 
   return (
     <Dialog open={!!planId} onOpenChange={(o) => !o && onClose()}>
@@ -350,24 +600,71 @@ function InstallmentDetail({
             <p className="text-sm text-muted-foreground">
               Total {formatMoney(plan.totalAmount, hidden)} em {plan.installments}x
             </p>
-            <div className="space-y-1">
-              {(plan.transactions ?? []).map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                >
-                  <span>
-                    {t.installmentNumber ? `${t.installmentNumber}ª · ` : ''}
-                    {t.dueDate ? formatDate(t.dueDate) : formatDate(t.date)}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{formatMoney(t.amount, hidden)}</span>
-                    <Badge variant={t.status === 'COMPLETED' ? 'success' : 'muted'}>
-                      {t.status === 'COMPLETED' ? 'paga' : 'pendente'}
-                    </Badge>
-                  </div>
+
+            {plan.shared && plan.shares && plan.shares.length > 0 && (
+              <div className="space-y-1.5 rounded-md border p-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  Dividido entre {Math.max(plan.shareCount ?? plan.shares.length, plan.shares.length)}{' '}
+                  pessoas
                 </div>
-              ))}
+                <div className="flex flex-wrap gap-1.5">
+                  {plan.shares.map((s, i) => (
+                    <Badge key={`${s.name}-${i}`} variant="muted">
+                      {s.name}
+                      {s.owner ? ' (você)' : ''}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Cada parcela rastreia o pagamento por pessoa na lista de transações.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              {(plan.transactions ?? []).map((t) => {
+                const tShares = t.shares ?? [];
+                const paidCount = tShares.filter((s) => s.paid).length;
+                const isPaid = effectiveStatus(t) === 'COMPLETED';
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                  >
+                    <span>
+                      {t.installmentNumber ? `${t.installmentNumber}ª · ` : ''}
+                      {t.dueDate ? formatDate(t.dueDate) : formatDate(t.date)}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {t.shared && tShares.length > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {paidCount}/{tShares.length} pagaram
+                        </span>
+                      )}
+                      <span className="font-medium">{formatMoney(t.amount, hidden)}</span>
+                      {isPaid ? (
+                        <Badge variant="success">paga</Badge>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7"
+                          disabled={payingId !== null}
+                          onClick={() => void payParcela(t)}
+                        >
+                          {payingId === t.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5" />
+                          )}
+                          Efetivar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
