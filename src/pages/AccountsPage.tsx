@@ -14,8 +14,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
+import { BankLogo } from '@/components/BankLogo';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
-import { useLiveAccounts, useBalances } from '@/hooks/useLiveData';
+import { useLiveAccounts, useBalances, useLiveInstitutions } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
 import { accountApi } from '@/api/endpoints';
@@ -52,10 +53,14 @@ const parseDay = (v: string): number | undefined => {
   return Math.min(31, Math.max(1, Math.round(n)));
 };
 
+const NO_BANK = 'none';
+
 export function AccountsPage() {
   const { activeId } = useWorkspace();
   const accounts = useLiveAccounts(activeId) ?? [];
   const balances = useBalances(activeId);
+  const institutions = useLiveInstitutions(activeId) ?? [];
+  const instById = new Map(institutions.map((i) => [i.id, i]));
   const { hidden } = usePrivacy();
   const { syncNow } = useSync();
   const [opened, setOpened] = useState(false);
@@ -64,13 +69,17 @@ export function AccountsPage() {
 
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('CHECKING');
+  const [institutionId, setInstitutionId] = useState<string>(NO_BANK);
   const [openingBalance, setOpeningBalance] = useState('0');
   // Cartão de crédito
   const [creditLimit, setCreditLimit] = useState('');
   const [statementClosingDay, setStatementClosingDay] = useState('');
   const [paymentDueDay, setPaymentDueDay] = useState('');
   const [lateInterestRate, setLateInterestRate] = useState('');
-  // Conta bancária (LIS / cheque especial)
+  // Conta bancária (dados + LIS / cheque especial)
+  const [agency, setAgency] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountDigit, setAccountDigit] = useState('');
   const [overdraftLimit, setOverdraftLimit] = useState('');
   const [overdraftInterestRate, setOverdraftInterestRate] = useState('');
 
@@ -79,6 +88,9 @@ export function AccountsPage() {
     setStatementClosingDay('');
     setPaymentDueDay('');
     setLateInterestRate('');
+    setAgency('');
+    setAccountNumber('');
+    setAccountDigit('');
     setOverdraftLimit('');
     setOverdraftInterestRate('');
   };
@@ -87,6 +99,7 @@ export function AccountsPage() {
     setEditing(null);
     setName('');
     setType('CHECKING');
+    setInstitutionId(NO_BANK);
     setOpeningBalance('0');
     resetExtras();
     setOpened(true);
@@ -95,11 +108,15 @@ export function AccountsPage() {
     setEditing(a);
     setName(a.name);
     setType(a.type);
+    setInstitutionId(a.institutionId ?? NO_BANK);
     setOpeningBalance(String(a.openingBalance));
     setCreditLimit(a.creditLimit ?? '');
     setStatementClosingDay(a.statementClosingDay != null ? String(a.statementClosingDay) : '');
     setPaymentDueDay(a.paymentDueDay != null ? String(a.paymentDueDay) : '');
     setLateInterestRate(a.lateInterestRate ?? '');
+    setAgency(a.agency ?? '');
+    setAccountNumber(a.accountNumber ?? '');
+    setAccountDigit(a.accountDigit ?? '');
     setOverdraftLimit(a.overdraftLimit ?? '');
     setOverdraftInterestRate(a.overdraftInterestRate ?? '');
     setOpened(true);
@@ -123,6 +140,9 @@ export function AccountsPage() {
       | 'statementClosingDay'
       | 'paymentDueDay'
       | 'lateInterestRate'
+      | 'agency'
+      | 'accountNumber'
+      | 'accountDigit'
       | 'overdraftLimit'
       | 'overdraftInterestRate'
     >
@@ -132,6 +152,7 @@ export function AccountsPage() {
     const empty = clearable ? null : undefined;
     const money = (n: number | undefined) => (n !== undefined ? String(n) : empty);
     const day = (n: number | undefined) => (n !== undefined ? n : empty);
+    const text = (v: string) => (v.trim() === '' ? empty : v.trim());
 
     if (isCard(type)) {
       return {
@@ -143,6 +164,9 @@ export function AccountsPage() {
     }
     if (isBankAccount(type)) {
       return {
+        agency: text(agency),
+        accountNumber: text(accountNumber),
+        accountDigit: text(accountDigit),
         overdraftLimit: money(parseNum(overdraftLimit)),
         overdraftInterestRate: money(parseNum(overdraftInterestRate)),
       };
@@ -156,10 +180,12 @@ export function AccountsPage() {
     setSaving(true);
     try {
       const opening = String(Number(openingBalance.replace(',', '.')) || 0);
+      const bank = institutionId === NO_BANK ? null : institutionId;
       const extras = typeSpecific();
       if (editing?.id) {
         await accountApi.update(activeId, editing.id, {
           name: name.trim(),
+          institutionId: bank,
           openingBalance: opening,
           ...extras,
         });
@@ -167,6 +193,7 @@ export function AccountsPage() {
         await accountApi.create(activeId, {
           name: name.trim(),
           type,
+          institutionId: bank,
           openingBalance: opening,
           ...extras,
         });
@@ -208,7 +235,14 @@ export function AccountsPage() {
         <div className="space-y-2">
           {accounts.map((a) => (
             <Card key={a.key} className="flex items-center justify-between gap-2 p-3">
-              <div>
+              <div className="flex min-w-0 items-center gap-3">
+                {(() => {
+                  const inst = a.institutionId ? instById.get(a.institutionId) : null;
+                  return inst ? (
+                    <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} size={36} />
+                  ) : null;
+                })()}
+                <div className="min-w-0">
                 <p className="font-medium">{a.name}</p>
                 <p className="text-xs text-muted-foreground">{TYPE_LABELS[a.type]}</p>
                 {isCard(a.type) && a.creditLimit != null && (
@@ -217,11 +251,19 @@ export function AccountsPage() {
                     {a.paymentDueDay != null && ` · vence dia ${a.paymentDueDay}`}
                   </p>
                 )}
+                {isBankAccount(a.type) && (a.agency || a.accountNumber) && (
+                  <p className="text-xs text-muted-foreground">
+                    {a.agency && `Ag. ${a.agency}`}
+                    {a.agency && a.accountNumber && ' · '}
+                    {a.accountNumber && `Conta ${a.accountNumber}${a.accountDigit ? `-${a.accountDigit}` : ''}`}
+                  </p>
+                )}
                 {isBankAccount(a.type) && a.overdraftLimit != null && Number(a.overdraftLimit) > 0 && (
                   <p className="text-xs text-muted-foreground">
                     LIS {formatMoneyCents(Math.round(Number(a.overdraftLimit) * 100), hidden)}
                   </p>
                 )}
+                </div>
               </div>
               <div className="flex items-center gap-1">
                 <span className="font-bold">{formatMoneyCents(balances.get(a.key) ?? 0, hidden)}</span>
@@ -268,6 +310,33 @@ export function AccountsPage() {
                   {Object.entries(TYPE_LABELS).map(([value, label]) => (
                     <SelectItem key={value} value={value}>
                       {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Banco</Label>
+              <Select
+                value={institutionId}
+                onValueChange={(v) => {
+                  setInstitutionId(v);
+                  // Pré-preenche o nome com o banco quando ainda está vazio.
+                  const inst = v === NO_BANK ? null : instById.get(v);
+                  if (inst && !name.trim()) setName(inst.shortName || inst.name);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o banco (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_BANK}>Sem banco</SelectItem>
+                  {institutions.map((inst) => (
+                    <SelectItem key={inst.id} value={inst.id}>
+                      <span className="flex items-center gap-2">
+                        <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} size={20} />
+                        {inst.shortName || inst.name}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -331,7 +400,39 @@ export function AccountsPage() {
 
             {isBankAccount(type) && (
               <div className="space-y-4 rounded-md border border-border/60 p-3">
-                <p className="text-sm font-medium">Limite da conta</p>
+                <p className="text-sm font-medium">Dados bancários</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="acc-agency">Agência</Label>
+                  <Input
+                    id="acc-agency"
+                    inputMode="numeric"
+                    placeholder="Ex.: 0001"
+                    value={agency}
+                    onChange={(e) => setAgency(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-[1fr_auto] gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="acc-number">Conta</Label>
+                    <Input
+                      id="acc-number"
+                      inputMode="numeric"
+                      placeholder="Ex.: 12345"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                    />
+                  </div>
+                  <div className="w-20 space-y-1.5">
+                    <Label htmlFor="acc-digit">Dígito</Label>
+                    <Input
+                      id="acc-digit"
+                      inputMode="numeric"
+                      placeholder="Ex.: 6"
+                      value={accountDigit}
+                      onChange={(e) => setAccountDigit(e.target.value)}
+                    />
+                  </div>
+                </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="acc-lis">LIS (limite da conta)</Label>
                   <CurrencyInput

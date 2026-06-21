@@ -13,6 +13,20 @@ export function useLiveAccounts(ws: string | null): LocalAccount[] | undefined {
   }, [ws]);
 }
 
+/**
+ * Catálogo de instituições (bancos) cacheado, ordenado por nome. Inclui as
+ * globais (workspaceId = null) e as customizadas do workspace ativo.
+ */
+export function useLiveInstitutions(ws: string | null): LocalInstitution[] | undefined {
+  return useLiveQuery(async () => {
+    if (!ws) return [];
+    const rows = await db.institutions.toArray();
+    return rows
+      .filter((i) => i.workspaceId === null || i.workspaceId === ws)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [ws]);
+}
+
 export function useLiveCategories(ws: string | null) {
   return useLiveQuery(async () => {
     if (!ws) return [];

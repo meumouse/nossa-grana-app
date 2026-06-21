@@ -106,6 +106,9 @@ export interface Account {
   statementClosingDay: number | null;
   paymentDueDay: number | null;
   lateInterestRate: Money | null;
+  agency: string | null;
+  accountNumber: string | null;
+  accountDigit: string | null;
   overdraftLimit: Money | null;
   overdraftInterestRate: Money | null;
   balance?: Money;
