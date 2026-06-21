@@ -114,4 +114,26 @@
   *::-webkit-scrollbar-thumb:hover {
     background-color: hsl(var(--muted-foreground));
   }
+
+  /* intl-tel-input: integra o seletor de país (campo + dropdown) ao tema
+     claro/escuro reaproveitando as CSS vars expostas pela própria lib. */
+  .iti {
+    width: 100%;
+    --iti-country-selector-bg: hsl(var(--popover));
+    --iti-border-color: hsl(var(--border));
+    --iti-icon-color: hsl(var(--muted-foreground));
+    --iti-hover-color: hsl(var(--accent));
+  }
+
+  .iti__country-selector {
+    color: hsl(var(--popover-foreground));
+  }
+
+  .iti__search-input {
+    color: hsl(var(--foreground));
+  }
+
+  .iti__search-input::placeholder {
+    color: hsl(var(--muted-foreground));
+  }
 }

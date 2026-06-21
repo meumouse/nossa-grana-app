@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from '@/components/ui/sonner';
@@ -44,6 +45,7 @@ export function ProfilePage() {
   const [surname, setSurname] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [phoneValid, setPhoneValid] = useState(true);
 
   // Processamento local da foto enviada (resize p/ data URI) antes de salvar.
   const [processing, setProcessing] = useState(false);
@@ -103,6 +105,10 @@ export function ProfilePage() {
     e.preventDefault();
     if (!email.trim()) {
       toast.error('Informe um e-mail.');
+      return;
+    }
+    if (!phoneValid) {
+      toast.error('Telefone inválido para o país selecionado.');
       return;
     }
     const emailChanged = email.trim().toLowerCase() !== user.email;
@@ -295,17 +301,21 @@ export function ProfilePage() {
               <Phone className="h-4 w-4" />
               Telefone
             </Label>
-            <Input
+            <PhoneInput
               id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="(11) 98888-7777"
-              maxLength={30}
-              autoComplete="tel"
+              initialValue={user.phone ?? ''}
+              onChange={setPhone}
+              onValidityChange={setPhoneValid}
+              className={cn(!phoneValid && 'border-destructive focus-visible:ring-destructive')}
             />
+            {!phoneValid && (
+              <p className="text-xs text-destructive">
+                Número inválido para o país selecionado.
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
-              Usado para contato e para futura recuperação de senha por SMS.
+              Escolha o país e digite o número. Usado para contato e para futura recuperação de
+              senha por SMS.
             </p>
           </div>
 
