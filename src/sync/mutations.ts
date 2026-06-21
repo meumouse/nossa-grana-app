@@ -1,5 +1,5 @@
 import { db, newClientId, nowIso, type LocalTransaction, type SyncEntity, type SyncOp } from '../db/dexie';
-import type { TransactionStatus, TransactionType } from '../api/types';
+import type { TransactionStatus, TransactionType, TxShare } from '../api/types';
 
 export interface TxInput {
   accountId: string; // key local da conta (= id do servidor p/ contas sincronizadas)
@@ -11,6 +11,10 @@ export interface TxInput {
   categoryId?: string | null;
   date: string; // ISO
   dueDate?: string | null;
+  duplicateDismissed?: boolean;
+  shared?: boolean;
+  shareCount?: number | null;
+  shares?: TxShare[] | null;
 }
 
 /** Enfileira uma mudança no outbox, colapsando upserts repetidos do mesmo item. */
@@ -43,6 +47,10 @@ export async function createTransactionLocal(workspaceId: string, input: TxInput
     paidAt: status === 'COMPLETED' ? input.date : null,
     transferId: null,
     counterAccountId: null,
+    duplicateDismissed: input.duplicateDismissed ?? false,
+    shared: input.shared ?? false,
+    shareCount: input.shareCount ?? null,
+    shares: input.shares ?? null,
     updatedAt: nowIso(),
     deletedAt: null,
   };
@@ -68,6 +76,10 @@ export async function updateTransactionLocal(key: string, patch: Partial<TxInput
     ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId ?? null } : {}),
     ...(patch.date !== undefined ? { date: patch.date } : {}),
     ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate ?? null } : {}),
+    ...(patch.duplicateDismissed !== undefined ? { duplicateDismissed: patch.duplicateDismissed } : {}),
+    ...(patch.shared !== undefined ? { shared: patch.shared } : {}),
+    ...(patch.shareCount !== undefined ? { shareCount: patch.shareCount ?? null } : {}),
+    ...(patch.shares !== undefined ? { shares: patch.shares ?? null } : {}),
     updatedAt: nowIso(),
   };
   await db.transaction('rw', db.transactions, db.outbox, async () => {
@@ -82,6 +94,80 @@ export async function payTransactionLocal(key: string, paidAt = nowIso()): Promi
   if (!row) return;
   await db.transaction('rw', db.transactions, db.outbox, async () => {
     await db.transactions.put({ ...row, status: 'COMPLETED', paidAt, updatedAt: nowIso() });
+    await enqueue('transaction', row.clientId, 'upsert', row.workspaceId);
+  });
+}
+
+/**
+ * Marca um conjunto de transações como "não é duplicata" (legítimas),
+ * silenciando o alerta de possível duplicidade para o grupo.
+ */
+export async function dismissDuplicateLocal(keys: string[]): Promise<void> {
+  await db.transaction('rw', db.transactions, db.outbox, async () => {
+    for (const key of keys) {
+      const row = await db.transactions.get(key);
+      if (!row || row.duplicateDismissed) continue;
+      await db.transactions.put({ ...row, duplicateDismissed: true, updatedAt: nowIso() });
+      await enqueue('transaction', row.clientId, 'upsert', row.workspaceId);
+    }
+  });
+}
+
+/**
+ * Define o rateio de uma transação. Lista vazia/`null` desfaz o
+ * compartilhamento. `shareCount` total de pessoas (default = nº de participantes).
+ */
+export async function setSharesLocal(
+  key: string,
+  shares: TxShare[] | null,
+  shareCount?: number | null,
+): Promise<void> {
+  const row = await db.transactions.get(key);
+  if (!row) return;
+  const has = !!shares && shares.length > 0;
+  await db.transaction('rw', db.transactions, db.outbox, async () => {
+    await db.transactions.put({
+      ...row,
+      shared: has,
+      shares: has ? shares : null,
+      shareCount: has ? shareCount ?? shares!.length : null,
+      updatedAt: nowIso(),
+    });
+    await enqueue('transaction', row.clientId, 'upsert', row.workspaceId);
+  });
+}
+
+/** Aplica o MESMO rateio a várias transações de uma vez (marcação em massa). */
+export async function bulkSetSharesLocal(
+  keys: string[],
+  shares: TxShare[],
+  shareCount?: number | null,
+): Promise<void> {
+  const count = shareCount ?? shares.length;
+  await db.transaction('rw', db.transactions, db.outbox, async () => {
+    for (const key of keys) {
+      const row = await db.transactions.get(key);
+      if (!row) continue;
+      // Clona o array de participantes p/ cada transação ter o seu próprio estado.
+      await db.transactions.put({
+        ...row,
+        shared: true,
+        shares: shares.map((s) => ({ ...s })),
+        shareCount: count,
+        updatedAt: nowIso(),
+      });
+      await enqueue('transaction', row.clientId, 'upsert', row.workspaceId);
+    }
+  });
+}
+
+/** Alterna o status "pago" de um participante (por índice) de uma transação. */
+export async function toggleSharePaidLocal(key: string, shareIndex: number): Promise<void> {
+  const row = await db.transactions.get(key);
+  if (!row || !row.shares) return;
+  const shares = row.shares.map((s, i) => (i === shareIndex ? { ...s, paid: !s.paid } : s));
+  await db.transaction('rw', db.transactions, db.outbox, async () => {
+    await db.transactions.put({ ...row, shares, updatedAt: nowIso() });
     await enqueue('transaction', row.clientId, 'upsert', row.workspaceId);
   });
 }

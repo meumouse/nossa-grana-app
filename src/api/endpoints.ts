@@ -1,10 +1,13 @@
 import { api, wsPath } from './client';
 import type {
   Account,
+  AnalyzeTransactionInput,
   AuthResponse,
   Budget,
   BudgetView,
   Category,
+  ConsistencyFinding,
+  ConsistencyKind,
   CreditCardInvoice,
   DashboardSummary,
   Forecast,
@@ -89,6 +92,12 @@ export const categoryApi = {
   update: (ws: string, id: string, body: Partial<Category>) =>
     api.patch<{ category: Category }>(wsPath(ws, `/categories/${id}`), body),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/categories/${id}`)),
+};
+
+// ---- Verificação de inconsistências com IA (online) ----
+export const consistencyApi = {
+  analyze: (ws: string, body: { checks: ConsistencyKind[]; transactions: AnalyzeTransactionInput[] }) =>
+    api.post<{ findings: ConsistencyFinding[] }>(wsPath(ws, '/transactions/analyze'), body),
 };
 
 // ---- Transfer (online) ----

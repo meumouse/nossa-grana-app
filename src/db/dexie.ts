@@ -6,7 +6,10 @@ import type {
   Money,
   TransactionStatus,
   TransactionType,
+  TxShare,
 } from '../api/types';
+
+export type { TxShare } from '../api/types';
 
 /**
  * Modelo local (offline-first). Cada linha tem:
@@ -95,6 +98,12 @@ export interface LocalTransaction {
   paidAt: string | null;
   transferId: string | null;
   counterAccountId: string | null;
+  // Duplicidade: usuário confirmou que NÃO é duplicata (silencia o alerta).
+  duplicateDismissed?: boolean;
+  // Compartilhamento/divisão da conta entre pessoas.
+  shared?: boolean;
+  shareCount?: number | null;
+  shares?: TxShare[] | null;
   updatedAt: string;
   deletedAt: string | null;
 }
@@ -137,6 +146,9 @@ class NossaGranaDB extends Dexie {
     this.version(2).stores({
       institutions: 'id, workspaceId',
     });
+    // Campos de duplicidade/compartilhamento (duplicateDismissed, shared,
+    // shareCount, shares) NÃO precisam de migração: Dexie é schemaless fora dos
+    // índices e nenhum deles é indexado (boolean não é chave válida no IndexedDB).
   }
 }
 

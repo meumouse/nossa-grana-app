@@ -60,6 +60,8 @@ export interface WorkspaceSettings {
   forecastHorizon: number;
   variableLookback: number;
   weekStartsOnMonday: boolean;
+  // Pessoas cadastradas p/ rateio de transações compartilhadas (nomes).
+  sharedContacts?: string[] | null;
   // Importação por IA. A chave nunca trafega de volta: só o booleano.
   llmProvider: string | null;
   llmModel: string | null;
@@ -77,6 +79,7 @@ export interface WorkspaceSettingsInput {
   forecastHorizon?: number;
   variableLookback?: number;
   weekStartsOnMonday?: boolean;
+  sharedContacts?: string[];
   llmProvider?: LlmProvider;
   llmModel?: string;
   /** Vazio limpa a chave; ausente mantém a atual. */
@@ -138,6 +141,14 @@ export interface Category {
   deletedAt: string | null;
 }
 
+/** Participante do rateio de uma transação compartilhada. */
+export interface TxShare {
+  name: string;
+  paid: boolean;
+  /** true = o dono do perfil (entra como pago por padrão). */
+  owner?: boolean;
+}
+
 export interface Transaction {
   id: string;
   clientId: string | null;
@@ -159,10 +170,37 @@ export interface Transaction {
   installmentPlanId?: string | null;
   installmentNumber?: number | null;
   recurringTransactionId?: string | null;
+  duplicateDismissed?: boolean;
+  shared?: boolean;
+  shareCount?: number | null;
+  shares?: TxShare[] | null;
   updatedAt: string;
   deletedAt: string | null;
   category?: Pick<Category, 'id' | 'name' | 'color' | 'icon' | 'nature' | 'kind'> | null;
   account?: Pick<Account, 'id' | 'name' | 'type'> | null;
+}
+
+// ---- Verificação de inconsistências (IA) ----
+export type ConsistencyKind = 'DUPLICATE' | 'CATEGORY' | 'AMOUNT';
+export type ConsistencySeverity = 'high' | 'medium' | 'low';
+
+export interface ConsistencyFinding {
+  kind: ConsistencyKind;
+  severity: ConsistencySeverity;
+  title: string;
+  detail: string;
+  suggestion?: string | null;
+  /** Índices que referenciam a ordem das transações enviadas na análise. */
+  transactionIndices: number[];
+}
+
+export interface AnalyzeTransactionInput {
+  index: number;
+  date: string;
+  description: string;
+  amount: number;
+  type: 'INCOME' | 'EXPENSE';
+  category?: string | null;
 }
 
 export interface ForecastMonth {

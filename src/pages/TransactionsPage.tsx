@@ -1,5 +1,16 @@
-import { useMemo, useState } from 'react';
-import { Plus, MoreVertical, Pencil, Trash2, Check, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Plus,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Check,
+  Sparkles,
+  Users,
+  AlertTriangle,
+  CheckSquare,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -8,24 +19,38 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
+import { useAuth } from '@/auth/AuthProvider';
 import { useLiveAccounts, useLiveCategories, useLiveTransactions } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
-import { deleteTransactionLocal, payTransactionLocal } from '@/sync/mutations';
+import { deleteTransactionLocal, dismissDuplicateLocal, payTransactionLocal } from '@/sync/mutations';
+import { workspaceApi } from '@/api/endpoints';
+import { detectDuplicates } from '@/lib/duplicates';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
 import { ImportAiModal } from '@/components/ImportAiModal';
+import { ShareTransactionModal } from '@/components/ShareTransactionModal';
+import { ConsistencyCheckModal } from '@/components/ConsistencyCheckModal';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { LocalTransaction } from '@/db/dexie';
+import type { TxShare } from '@/api/types';
 
 type StatusFilter = 'ALL' | 'COMPLETED' | 'PENDING';
 
+interface ShareTarget {
+  keys: string[];
+  initial?: TxShare[] | null;
+  amount?: number | null;
+}
+
 export function TransactionsPage() {
   const { activeId } = useWorkspace();
+  const { user } = useAuth();
   const accounts = useLiveAccounts(activeId) ?? [];
   const categories = useLiveCategories(activeId) ?? [];
   const { hidden } = usePrivacy();
@@ -35,10 +60,33 @@ export function TransactionsPage() {
 
   const [opened, setOpened] = useState(false);
   const [importOpened, setImportOpened] = useState(false);
+  const [checkOpened, setCheckOpened] = useState(false);
   const [editing, setEditing] = useState<LocalTransaction | null>(null);
+  const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
+
+  // Seleção em massa (p/ marcar transações compartilhadas de uma vez).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Pessoas cadastradas (settings) p/ autocomplete no rateio.
+  const [contacts, setContacts] = useState<string[]>([]);
+  useEffect(() => {
+    if (!activeId) return;
+    let live = true;
+    workspaceApi
+      .getSettings(activeId)
+      .then((r) => live && setContacts(r.settings?.sharedContacts ?? []))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [activeId]);
+
+  const ownerName = user?.name?.trim() || 'Você';
 
   const accMap = useMemo(() => new Map(accounts.map((a) => [a.key, a.name])), [accounts]);
   const catMap = useMemo(() => new Map(categories.map((c) => [c.key, c])), [categories]);
+  const dupes = useMemo(() => detectDuplicates(txs), [txs]);
 
   const openNew = () => {
     setEditing(null);
@@ -61,11 +109,46 @@ export function TransactionsPage() {
     toast.success('Lançamento efetivado');
   };
 
+  const keepNotDuplicate = async (t: LocalTransaction) => {
+    const group = [t.key, ...(dupes.get(t.key) ?? [])];
+    await dismissDuplicateLocal(group);
+    void syncNow();
+    toast('Marcada como legítima');
+  };
+
+  const toggleSelected = (key: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+
+  const exitSelect = () => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
+
+  const openBulkShare = () => {
+    if (selected.size === 0) return toast.error('Selecione ao menos uma transação');
+    setShareTarget({ keys: [...selected], initial: null, amount: null });
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Extrato</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setCheckOpened(true)} disabled={txs.length === 0}>
+            <Sparkles className="h-4 w-4" />
+            Verificar inconsistências
+          </Button>
+          <Button
+            variant={selectMode ? 'secondary' : 'outline'}
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+          >
+            <CheckSquare className="h-4 w-4" />
+            {selectMode ? 'Cancelar' : 'Selecionar'}
+          </Button>
           <Button variant="outline" onClick={() => setImportOpened(true)}>
             <Sparkles className="h-4 w-4" />
             Importar com IA
@@ -76,6 +159,16 @@ export function TransactionsPage() {
           </Button>
         </div>
       </div>
+
+      {dupes.size > 0 && (
+        <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>
+            {dupes.size} {dupes.size === 1 ? 'lançamento com' : 'lançamentos com'} possível duplicidade. Revise os
+            marcados abaixo.
+          </span>
+        </div>
+      )}
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
         <TabsList>
@@ -88,61 +181,144 @@ export function TransactionsPage() {
       {txs.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">Nenhum lançamento ainda. Toque em “Novo”.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 pb-20">
           {txs.map((t) => {
             const cat = t.categoryId ? catMap.get(t.categoryId) : null;
             const income = t.type === 'INCOME';
             const transfer = t.type === 'TRANSFER';
+            const isDupe = dupes.has(t.key);
+            const isSelected = selected.has(t.key);
+            const paidCount = t.shares?.filter((s) => s.paid).length ?? 0;
+            const peopleCount = t.shareCount ?? t.shares?.length ?? 0;
             return (
-              <Card key={t.key} className="flex items-center justify-between gap-2 p-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate font-medium">{t.description}</span>
-                    {t.status === 'PENDING' && <Badge variant="warning">pendente</Badge>}
-                    {!t.id && <Badge variant="muted">na fila</Badge>}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(t.date)} · {accMap.get(t.accountId) ?? '—'}
-                    {cat ? ` · ${cat.name}` : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span
-                    className={cn(
-                      'whitespace-nowrap font-bold',
-                      transfer ? 'text-muted-foreground' : income ? 'text-success' : 'text-destructive',
-                    )}
-                  >
-                    {income ? '+' : transfer ? '' : '−'}
-                    {formatMoney(Math.abs(Number(t.amount)), hidden)}
-                  </span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" aria-label="Ações">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {t.status === 'PENDING' && (
-                        <DropdownMenuItem onClick={() => void pay(t)}>
-                          <Check className="h-4 w-4" />
-                          Efetivar
-                        </DropdownMenuItem>
+              <Card
+                key={t.key}
+                className={cn(
+                  'flex items-center justify-between gap-2 p-3',
+                  isDupe && 'border-warning/50',
+                  isSelected && 'ring-2 ring-primary',
+                )}
+              >
+                {selectMode && (
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-primary"
+                    checked={isSelected}
+                    onChange={() => toggleSelected(t.key)}
+                    aria-label={`Selecionar ${t.description}`}
+                  />
+                )}
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                  onClick={() => (selectMode ? toggleSelected(t.key) : undefined)}
+                  disabled={!selectMode}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-medium">{t.description}</span>
+                      {t.shared && (
+                        <span title={`Dividido entre ${peopleCount} pessoas`}>
+                          <Users className="h-3.5 w-3.5 text-primary" />
+                        </span>
                       )}
-                      <DropdownMenuItem onClick={() => openEdit(t)}>
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive" onClick={() => void remove(t)}>
-                        <Trash2 className="h-4 w-4" />
-                        Excluir
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                      {t.status === 'PENDING' && <Badge variant="warning">pendente</Badge>}
+                      {!t.id && <Badge variant="muted">na fila</Badge>}
+                      {isDupe && (
+                        <Badge variant="warning" className="gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          duplicada?
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(t.date)} · {accMap.get(t.accountId) ?? '—'}
+                      {cat ? ` · ${cat.name}` : ''}
+                      {t.shared ? ` · ${paidCount}/${peopleCount} pagaram` : ''}
+                    </p>
+                  </div>
+                </button>
+                {!selectMode && (
+                  <div className="flex items-center gap-1">
+                    <span
+                      className={cn(
+                        'whitespace-nowrap font-bold',
+                        transfer ? 'text-muted-foreground' : income ? 'text-success' : 'text-destructive',
+                      )}
+                    >
+                      {income ? '+' : transfer ? '' : '−'}
+                      {formatMoney(Math.abs(Number(t.amount)), hidden)}
+                    </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label="Ações">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {t.status === 'PENDING' && (
+                          <DropdownMenuItem onClick={() => void pay(t)}>
+                            <Check className="h-4 w-4" />
+                            Efetivar
+                          </DropdownMenuItem>
+                        )}
+                        {!transfer && (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              setShareTarget({
+                                keys: [t.key],
+                                initial: t.shares ?? null,
+                                amount: Math.abs(Number(t.amount)),
+                              })
+                            }
+                          >
+                            <Users className="h-4 w-4" />
+                            {t.shared ? 'Gerenciar divisão' : 'Compartilhar / dividir'}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => openEdit(t)}>
+                          <Pencil className="h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                        {isDupe && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => void keepNotDuplicate(t)}>
+                              <Check className="h-4 w-4" />
+                              Não é duplicata
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        <DropdownMenuItem className="text-destructive" onClick={() => void remove(t)}>
+                          <Trash2 className="h-4 w-4" />
+                          Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {/* Barra de ação da seleção em massa */}
+      {selectMode && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="mx-auto flex max-w-2xl items-center justify-between gap-2">
+            <span className="text-sm text-muted-foreground">{selected.size} selecionada(s)</span>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={exitSelect}>
+                <X className="h-4 w-4" />
+                Cancelar
+              </Button>
+              <Button onClick={openBulkShare} disabled={selected.size === 0}>
+                <Users className="h-4 w-4" />
+                Compartilhar
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -156,11 +332,29 @@ export function TransactionsPage() {
             categories={categories}
             editing={editing}
           />
-          <ImportAiModal
-            opened={importOpened}
-            onClose={() => setImportOpened(false)}
+          <ImportAiModal opened={importOpened} onClose={() => setImportOpened(false)} workspaceId={activeId} />
+          <ConsistencyCheckModal
+            opened={checkOpened}
+            onClose={() => setCheckOpened(false)}
             workspaceId={activeId}
+            transactions={txs}
+            accMap={accMap}
+            catMap={catMap}
           />
+          {shareTarget && (
+            <ShareTransactionModal
+              opened={!!shareTarget}
+              onClose={() => setShareTarget(null)}
+              workspaceId={activeId}
+              targetKeys={shareTarget.keys}
+              initialShares={shareTarget.initial}
+              amount={shareTarget.amount}
+              contacts={contacts}
+              ownerName={ownerName}
+              onContactsAdded={(names) => setContacts((prev) => Array.from(new Set([...prev, ...names])))}
+              onSaved={exitSelect}
+            />
+          )}
         </>
       )}
     </div>

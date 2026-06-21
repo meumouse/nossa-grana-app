@@ -53,6 +53,10 @@ async function pushOutbox(ws: string): Promise<number> {
         date: row.date,
         dueDate: row.dueDate,
         paidAt: row.paidAt,
+        duplicateDismissed: row.duplicateDismissed ?? false,
+        shared: row.shared ?? false,
+        shareCount: row.shareCount ?? null,
+        shares: row.shares ?? null,
       },
     });
   }
@@ -152,6 +156,10 @@ async function putTransaction(t: Transaction): Promise<void> {
     paidAt: t.paidAt,
     transferId: t.transferId,
     counterAccountId: t.counterAccountId,
+    duplicateDismissed: t.duplicateDismissed ?? false,
+    shared: t.shared ?? false,
+    shareCount: t.shareCount ?? null,
+    shares: t.shares ?? null,
     updatedAt: t.updatedAt,
     deletedAt: t.deletedAt,
   });
