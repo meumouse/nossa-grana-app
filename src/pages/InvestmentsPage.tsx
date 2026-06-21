@@ -16,6 +16,8 @@ import { useLiveAccounts } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { investmentApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
+import { LoadMore } from '@/components/LoadMore';
+import { usePagedList } from '@/hooks/usePagedList';
 import { cn } from '@/lib/utils';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { InvestmentAsset, InvestmentClass, InvestmentTxKind } from '@/api/types';
@@ -126,6 +128,7 @@ export function InvestmentsPage() {
   });
 
   const assets = data?.assets ?? [];
+  const paged = usePagedList(assets, { resetKey: activeId });
 
   const openAsset = () => {
     setName('');
@@ -184,7 +187,7 @@ export function InvestmentsPage() {
         </p>
       ) : (
         <div className="space-y-2">
-          {assets.map((a) => {
+          {paged.visible.map((a) => {
             const pl = profit(a);
             const qty = Number(a.position?.quantity ?? 0);
             return (
@@ -220,6 +223,12 @@ export function InvestmentsPage() {
               </Card>
             );
           })}
+          <LoadMore
+            shown={paged.shown}
+            total={paged.total}
+            hasMore={paged.hasMore}
+            onLoadMore={paged.loadMore}
+          />
         </div>
       )}
 

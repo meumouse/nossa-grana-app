@@ -22,6 +22,8 @@ import { useSync } from '@/sync/SyncProvider';
 import { payTransactionLocal, unpayTransactionLocal } from '@/sync/mutations';
 import { installmentApi, transactionApi, workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
+import { LoadMore } from '@/components/LoadMore';
+import { usePagedList } from '@/hooks/usePagedList';
 import { formatDate, formatMoney } from '@/lib/format';
 import { fireConfetti } from '@/lib/confetti';
 import type { InstallmentPlan, Transaction, TxShare } from '@/api/types';
@@ -297,6 +299,10 @@ export function InstallmentsPage() {
     });
   }, [allItems, search, categoryFilter, accountFilter, cardFilter, planSource]);
 
+  const paged = usePagedList(items, {
+    resetKey: `${search}|${categoryFilter}|${accountFilter}|${cardFilter}`,
+  });
+
   const clearFilters = () => {
     setSearch('');
     setCategoryFilter('ALL');
@@ -395,7 +401,7 @@ export function InstallmentsPage() {
         </p>
       ) : (
         <div className="space-y-2">
-          {items.map((p) => (
+          {paged.visible.map((p) => (
             <Card
               key={p.id}
               className="flex cursor-pointer items-center justify-between gap-2 p-3 hover:bg-accent/40"
@@ -438,6 +444,12 @@ export function InstallmentsPage() {
               </div>
             </Card>
           ))}
+          <LoadMore
+            shown={paged.shown}
+            total={paged.total}
+            hasMore={paged.hasMore}
+            onLoadMore={paged.loadMore}
+          />
         </div>
       )}
 

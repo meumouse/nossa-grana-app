@@ -13,6 +13,8 @@ import { useLiveAccounts, useLiveCards } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { analyticsApi, invoiceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
+import { LoadMore } from '@/components/LoadMore';
+import { usePagedList } from '@/hooks/usePagedList';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { CreditCardInvoice, InvoiceStatus } from '@/api/types';
 
@@ -88,6 +90,7 @@ export function InvoicesPage() {
   });
 
   const invoices = data?.invoices ?? [];
+  const paged = usePagedList(invoices, { resetKey: activeId });
 
   return (
     <div className="space-y-4">
@@ -107,7 +110,7 @@ export function InvoicesPage() {
         </p>
       ) : (
         <div className="space-y-2">
-          {invoices.map((inv) => {
+          {paged.visible.map((inv) => {
             const projected = isProjected(inv);
             const st = projected ? PROJECTED : STATUS[inv.status];
             return (
@@ -146,6 +149,12 @@ export function InvoicesPage() {
               </Card>
             );
           })}
+          <LoadMore
+            shown={paged.shown}
+            total={paged.total}
+            hasMore={paged.hasMore}
+            onLoadMore={paged.loadMore}
+          />
         </div>
       )}
 

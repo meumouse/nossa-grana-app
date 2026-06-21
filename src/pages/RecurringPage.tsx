@@ -11,6 +11,8 @@ import { useLiveAccounts, useLiveCategories } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { recurringApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
+import { LoadMore } from '@/components/LoadMore';
+import { usePagedList } from '@/hooks/usePagedList';
 import { formatMoney } from '@/lib/format';
 import { FREQ_LABELS, RecurringFormModal } from '@/components/RecurringFormModal';
 import type { RecurringTransaction } from '@/api/types';
@@ -59,6 +61,7 @@ export function RecurringPage() {
   });
 
   const items = data?.items ?? [];
+  const paged = usePagedList(items, { resetKey: activeId });
 
   return (
     <div className="space-y-4">
@@ -84,7 +87,7 @@ export function RecurringPage() {
         </p>
       ) : (
         <div className="space-y-2">
-          {items.map((r) => (
+          {paged.visible.map((r) => (
             <RecurringCard
               key={r.id}
               item={r}
@@ -93,6 +96,12 @@ export function RecurringPage() {
               onRemove={() => remove.mutate(r.id)}
             />
           ))}
+          <LoadMore
+            shown={paged.shown}
+            total={paged.total}
+            hasMore={paged.hasMore}
+            onLoadMore={paged.loadMore}
+          />
         </div>
       )}
 

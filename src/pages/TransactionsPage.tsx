@@ -58,6 +58,8 @@ import { ShareTransactionModal } from '@/components/ShareTransactionModal';
 import { ConsistencyCheckModal } from '@/components/ConsistencyCheckModal';
 import { RecurringFormModal, type RecurringInitial } from '@/components/RecurringFormModal';
 import { SuggestedRecurringSection } from '@/components/SuggestedRecurringSection';
+import { LoadMore } from '@/components/LoadMore';
+import { usePagedList } from '@/hooks/usePagedList';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { LocalTransaction } from '@/db/dexie';
 import type { TxShare } from '@/api/types';
@@ -157,6 +159,12 @@ export function TransactionsPage() {
       return true;
     });
   }, [txs, search, accountFilter, categoryFilter, typeFilter, range]);
+
+  // Paginação "carregar mais" sobre o extrato já filtrado. Volta à 1ª página
+  // quando filtros, busca ou aba de status mudam.
+  const paged = usePagedList(visible, {
+    resetKey: `${filter}|${search}|${accountFilter}|${categoryFilter}|${typeFilter}|${range?.from?.toISOString() ?? ''}|${range?.to?.toISOString() ?? ''}`,
+  });
 
   const clearFilters = () => {
     setSearch('');
@@ -389,7 +397,7 @@ export function TransactionsPage() {
         </p>
       ) : (
         <div className="space-y-2 pb-20">
-          {visible.map((t) => {
+          {paged.visible.map((t) => {
             const cat = t.categoryId ? catMap.get(t.categoryId) : null;
             const income = t.type === 'INCOME';
             const transfer = t.type === 'TRANSFER';
@@ -519,6 +527,12 @@ export function TransactionsPage() {
               </Card>
             );
           })}
+          <LoadMore
+            shown={paged.shown}
+            total={paged.total}
+            hasMore={paged.hasMore}
+            onLoadMore={paged.loadMore}
+          />
         </div>
       )}
 
