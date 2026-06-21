@@ -202,11 +202,15 @@ export function ProfilePage() {
                     aria-label={`Selecionar avatar ${src}`}
                     aria-pressed={selected}
                     className={cn(
-                      'relative h-14 w-14 overflow-hidden rounded-full ring-2 ring-transparent transition hover:scale-105 focus-visible:outline-none focus-visible:ring-ring disabled:opacity-50',
+                      'relative h-14 w-14 rounded-full ring-2 ring-transparent transition hover:scale-105 focus-visible:outline-none focus-visible:ring-ring disabled:opacity-50',
                       selected && 'ring-primary',
                     )}
                   >
-                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={src}
+                      alt=""
+                      className="h-full w-full overflow-hidden rounded-full object-cover"
+                    />
                     {selected && (
                       <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-background">
                         <Check className="h-3 w-3" />
