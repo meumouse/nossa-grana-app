@@ -48,8 +48,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:3333', changeOrigin: true },
-      '/health': { target: 'http://localhost:3333', changeOrigin: true },
+      // 127.0.0.1 (não "localhost"): no Windows + Node 18+ "localhost" pode
+      // resolver para ::1 (IPv6) primeiro, mas a API escuta só em IPv4 (0.0.0.0),
+      // o que fazia o proxy devolver 500 (ECONNREFUSED) em vez de repassar a API.
+      '/api': { target: 'http://127.0.0.1:3333', changeOrigin: true },
+      '/health': { target: 'http://127.0.0.1:3333', changeOrigin: true },
     },
   },
 });
