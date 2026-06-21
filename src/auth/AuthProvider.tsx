@@ -13,6 +13,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (input: { email: string; password: string; name?: string }) => Promise<void>;
   logout: () => Promise<void>;
+  /** Atualiza o usuário em memória + localStorage (ex.: após salvar o perfil). */
+  updateUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -63,7 +65,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('guest');
   };
 
-  const value = useMemo<AuthContextValue>(() => ({ user, status, login, register, logout }), [user, status]);
+  const updateUser = (u: User) => {
+    session.setUser(u);
+    setUser(u);
+  };
+
+  const value = useMemo<AuthContextValue>(
+    () => ({ user, status, login, register, logout, updateUser }),
+    [user, status],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

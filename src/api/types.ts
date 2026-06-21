@@ -25,9 +25,21 @@ export interface User {
   email: string;
   emailVerified: boolean;
   name: string | null;
+  surname: string | null;
   avatarUrl: string | null;
+  phone: string | null;
   locale: string;
   timezone: string;
+}
+
+/** Campos editáveis do perfil (PATCH parcial). Vazio limpa o campo. */
+export interface ProfileUpdateInput {
+  name?: string;
+  surname?: string;
+  email?: string;
+  phone?: string;
+  /** Preset (/avatars/xx.svg), data URI da foto, ou '' p/ remover. */
+  avatarUrl?: string;
 }
 
 export interface AuthResponse {

@@ -12,6 +12,7 @@ import {
   TrendingUp,
   LineChart,
   Settings,
+  UserRound,
   Eye,
   EyeOff,
   RefreshCw,
@@ -26,9 +27,10 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { initialsFrom } from '@/lib/avatars';
 import { useAuth } from '@/auth/AuthProvider';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
 import { useSync } from '@/sync/SyncProvider';
@@ -72,6 +74,7 @@ const LINKS = [
   { to: '/invoices', label: 'Faturas', icon: Receipt },
   { to: '/investments', label: 'Investimentos', icon: TrendingUp },
   { to: '/forecast', label: 'Previsão', icon: LineChart },
+  { to: '/profile', label: 'Perfil', icon: UserRound },
   { to: '/settings', label: 'Configurações', icon: Settings },
 ];
 
@@ -115,18 +118,27 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function ProfileBlock() {
+function ProfileBlock({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth();
-  const initial = (user?.name ?? user?.email ?? '?').slice(0, 1).toUpperCase();
+  const initials = initialsFrom(user?.name ?? null, user?.surname ?? null, user?.email ?? '');
+  const fullName = [user?.name, user?.surname].filter(Boolean).join(' ');
   return (
     <div className="flex items-center gap-3 rounded-lg border bg-background/40 p-2.5">
-      <Avatar className="h-9 w-9">
-        <AvatarFallback>{initial}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{user?.name ?? 'Você'}</p>
-        <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
-      </div>
+      <NavLink
+        to="/profile"
+        onClick={onNavigate}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-md transition-opacity hover:opacity-80"
+        title="Editar perfil"
+      >
+        <Avatar className="h-9 w-9">
+          {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt="" /> : null}
+          <AvatarFallback>{initials}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">{fullName || 'Você'}</p>
+          <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+        </div>
+      </NavLink>
       <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => void logout()} title="Sair" aria-label="Sair">
         <LogOut className="h-4 w-4" />
       </Button>
@@ -147,7 +159,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <NavLinks onNavigate={onNavigate} />
       </div>
       <div className="px-2 pb-1">
-        <ProfileBlock />
+        <ProfileBlock onNavigate={onNavigate} />
       </div>
     </div>
   );

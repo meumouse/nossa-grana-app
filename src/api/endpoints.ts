@@ -22,6 +22,7 @@ import type {
   InvestmentTransaction,
   InvestmentTxKind,
   InvoiceStatus,
+  ProfileUpdateInput,
   RecurrenceFrequency,
   RecurringTransaction,
   Transaction,
@@ -38,6 +39,8 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     api.post<AuthResponse>('/api/auth/login', body, false),
   me: () => api.get<{ user: User }>('/api/auth/me'),
+  updateProfile: (body: ProfileUpdateInput) =>
+    api.patch<{ user: User }>('/api/auth/me', body),
   logout: (refreshToken: string) => api.post<void>('/api/auth/logout', { refreshToken }, false),
   forgotPassword: (email: string) =>
     api.post<{ message: string }>('/api/auth/forgot-password', { email }, false),

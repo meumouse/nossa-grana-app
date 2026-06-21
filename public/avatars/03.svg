@@ -1,0 +1,13 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Avatar gato">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" fill="url(#g)"/>
+  <path d="M78 70l24 36h52l24-36-8 64a66 66 0 0 1-108 0z" fill="#ffffff" fill-opacity="0.95"/>
+  <circle cx="106" cy="128" r="9" fill="#10b981"/>
+  <circle cx="150" cy="128" r="9" fill="#10b981"/>
+  <path d="M120 150h16l-8 10z" fill="#10b981"/>
+</svg>
