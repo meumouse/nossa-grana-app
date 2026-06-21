@@ -7,12 +7,11 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
 import { workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
-import type { LlmModelInfo, LlmProvider, WorkspaceSettingsInput } from '@/api/types';
+import type { LlmModelInfo, LlmProvider, WorkspaceSettings, WorkspaceSettingsInput } from '@/api/types';
 
 // Providers suportados (o backend valida o mesmo conjunto).
 const PROVIDERS: { value: LlmProvider; label: string }[] = [
@@ -33,6 +32,13 @@ const MODEL_SUGGESTIONS: Record<LlmProvider, string[]> = {
   google: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
 };
 const CURRENCIES = ['BRL', 'USD', 'EUR', 'GBP', 'ARS'];
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  BRL: 'R$',
+  USD: 'US$',
+  EUR: '€',
+  GBP: '£',
+  ARS: 'AR$',
+};
 // Valor-sentinela do seletor de modelo p/ "usar o padrão do servidor" (o Radix
 // Select não aceita value vazio); ao salvar, vira string vazia.
 const DEFAULT_MODEL = '__default__';
@@ -64,7 +70,7 @@ export function SettingsPage() {
   const [monthStartDay, setMonthStartDay] = useState('1');
   const [forecastHorizon, setForecastHorizon] = useState('12');
   const [variableLookback, setVariableLookback] = useState('3');
-  const [weekStartsOnMonday, setWeekStartsOnMonday] = useState(true);
+  const [weekStartsOnMonday, setWeekStartsOnMonday] = useState(false);
 
   // --- IA ---
   const [provider, setProvider] = useState<LlmProvider>('openai');
@@ -80,11 +86,16 @@ export function SettingsPage() {
     setMonthStartDay(String(settings.monthStartDay ?? 1));
     setForecastHorizon(String(settings.forecastHorizon ?? 12));
     setVariableLookback(String(settings.variableLookback ?? 3));
-    setWeekStartsOnMonday(settings.weekStartsOnMonday ?? true);
-    setProvider((settings.llmProvider as LlmProvider) || 'openai');
+    setWeekStartsOnMonday(settings.weekStartsOnMonday ?? false);
+    const hydratedProvider = (settings.llmProvider as LlmProvider) || 'openai';
+    setProvider(hydratedProvider);
     setModel(settings.llmModel ?? '');
     setApiKey('');
-    setModels([]);
+    // Restaura a lista de modelos cacheada no banco (só se for do mesmo
+    // provider; evita mostrar modelos de um provider que não está selecionado).
+    setModels(
+      settings.llmModelsProvider === hydratedProvider ? settings.llmModels ?? [] : [],
+    );
   }, [settings]);
 
   const save = useMutation({
@@ -108,6 +119,20 @@ export function SettingsPage() {
       }),
     onSuccess: (res) => {
       setModels(res.models);
+      // A lista já foi persistida no banco pelo backend; reflete no cache local
+      // (sem refetch, p/ não limpar a chave digitada no formulário).
+      qc.setQueryData<{ settings: WorkspaceSettings | null }>(['settings', activeId], (prev) =>
+        prev?.settings
+          ? {
+              settings: {
+                ...prev.settings,
+                llmModels: res.models,
+                llmModelsProvider: res.provider,
+                llmModelsFetchedAt: res.fetchedAt,
+              },
+            }
+          : prev,
+      );
       toast.success(
         res.models.length
           ? `${res.models.length} modelo(s) encontrado(s)`
@@ -207,7 +232,7 @@ export function SettingsPage() {
                   <SelectContent>
                     {CURRENCIES.map((c) => (
                       <SelectItem key={c} value={c}>
-                        {c}
+                        <span className="text-muted-foreground">{CURRENCY_SYMBOLS[c] ?? ''}</span> {c}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -255,19 +280,24 @@ export function SettingsPage() {
                 />
                 <p className="text-xs text-muted-foreground">1–12. Base da média móvel na previsão.</p>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <div>
-                <Label htmlFor="weekStartsOnMonday">Semana começa na segunda</Label>
-                <p className="text-xs text-muted-foreground">Desligado = domingo.</p>
+              <div className="space-y-2">
+                <Label htmlFor="weekStart">Primeiro dia da semana</Label>
+                <Select
+                  value={weekStartsOnMonday ? 'monday' : 'sunday'}
+                  onValueChange={(v) => setWeekStartsOnMonday(v === 'monday')}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger id="weekStart">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sunday">Domingo</SelectItem>
+                    <SelectItem value="monday">Segunda-feira</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Define o início da semana nos calendários e relatórios.</p>
               </div>
-              <Switch
-                id="weekStartsOnMonday"
-                checked={weekStartsOnMonday}
-                onCheckedChange={setWeekStartsOnMonday}
-                disabled={!canEdit}
-              />
             </div>
 
             {canEdit ? (
@@ -363,6 +393,11 @@ export function SettingsPage() {
                   ? `${models.length} modelo(s) do provedor — escolha um com visão (lê PDF/imagem).`
                   : 'Escolha um modelo com visão (lê PDF/imagem) ou clique em “Buscar modelos” para listar os do provedor pela API. “Padrão do servidor” usa o configurado no servidor.'}
               </p>
+              {settings?.llmModelsFetchedAt && settings.llmModelsProvider === provider && (
+                <p className="text-xs text-muted-foreground">
+                  Lista atualizada em {new Date(settings.llmModelsFetchedAt).toLocaleString('pt-BR')}.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
