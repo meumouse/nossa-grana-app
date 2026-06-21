@@ -293,6 +293,19 @@ export interface Forecast {
   firstNegativeMonth: string | null;
 }
 
+/**
+ * Previsão de parcelas de conta/banco agrupadas por mês (último dia do mês =
+ * vencimento). As parcelas de cartão saem como faturas futuras em CreditCardInvoice.
+ */
+export interface AccountInstallmentForecast {
+  accountId: string;
+  accountName: string;
+  month: string;
+  dueDate: string;
+  total: Money;
+  count: number;
+}
+
 export interface DashboardSummary {
   month: string;
   totalBalance: Money;

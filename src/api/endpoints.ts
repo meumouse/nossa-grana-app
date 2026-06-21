@@ -1,6 +1,7 @@
 import { api, wsPath } from './client';
 import type {
   Account,
+  AccountInstallmentForecast,
   AnalyzeTransactionInput,
   AuthResponse,
   Budget,
@@ -152,6 +153,9 @@ export const analyticsApi = {
   },
   summary: (ws: string) => api.get<DashboardSummary>(wsPath(ws, '/forecast/summary')),
   forecast: (ws: string) => api.get<Forecast>(wsPath(ws, '/forecast')),
+  // Previsão de parcelas de conta/banco agrupadas por mês.
+  installmentForecast: (ws: string) =>
+    api.get<{ accounts: AccountInstallmentForecast[] }>(wsPath(ws, '/forecast/invoices')),
 };
 
 // ---- Sync ----
