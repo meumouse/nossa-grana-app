@@ -352,6 +352,28 @@ export interface RecurringTransaction {
   category?: Pick<Category, 'id' | 'name' | 'color' | 'icon'> | null;
 }
 
+/**
+ * Recorrência sugerida pela detecção (série regular ainda sem template). É um
+ * candidato de cadastro: ao confirmar, as transações em `transactionIds` são
+ * vinculadas (não recriadas) e só ocorrências futuras são materializadas.
+ */
+export interface RecurringSuggestion {
+  description: string;
+  type: 'INCOME' | 'EXPENSE';
+  amount: number;
+  accountId: string;
+  categoryId: string | null;
+  suggestedCategory: string | null;
+  frequency: RecurrenceFrequency;
+  interval: number;
+  anchorDay: number | null;
+  startDate: string;
+  nextDate: string;
+  confidence: number;
+  occurrences: number;
+  transactionIds: string[];
+}
+
 // ---- Parcelamentos ----
 export interface InstallmentPlan {
   id: string;

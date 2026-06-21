@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   CheckSquare,
   Search,
+  RefreshCw,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -55,6 +56,8 @@ import { TransactionFormModal } from '@/components/TransactionFormModal';
 import { ImportAiModal } from '@/components/ImportAiModal';
 import { ShareTransactionModal } from '@/components/ShareTransactionModal';
 import { ConsistencyCheckModal } from '@/components/ConsistencyCheckModal';
+import { RecurringFormModal, type RecurringInitial } from '@/components/RecurringFormModal';
+import { SuggestedRecurringSection } from '@/components/SuggestedRecurringSection';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { LocalTransaction } from '@/db/dexie';
 import type { TxShare } from '@/api/types';
@@ -90,6 +93,8 @@ export function TransactionsPage() {
   const [checkOpened, setCheckOpened] = useState(false);
   const [editing, setEditing] = useState<LocalTransaction | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
+  // Criar recorrência a partir de um lançamento (vincula a transação existente).
+  const [recurringFrom, setRecurringFrom] = useState<{ initial: RecurringInitial; linkIds: string[] } | null>(null);
 
   // Seleção em massa (p/ marcar transações compartilhadas de uma vez).
   const [selectMode, setSelectMode] = useState(false);
@@ -121,6 +126,9 @@ export function TransactionsPage() {
     [accounts, cards],
   );
   const catMap = useMemo(() => new Map(categories.map((c) => [c.key, c])), [categories]);
+  // Resolve a key local → id do servidor (recorrência é online, usa ids reais).
+  const accIdMap = useMemo(() => new Map(accounts.map((a) => [a.key, a.id ?? a.key])), [accounts]);
+  const catIdMap = useMemo(() => new Map(categories.map((c) => [c.key, c.id ?? c.key])), [categories]);
   const dupes = useMemo(() => detectDuplicates(txs), [txs]);
   // Cópias redundantes (mantém uma por grupo) — alvo do "Remover duplicadas".
   const removableDupes = useMemo(() => redundantDuplicates(txs), [txs]);
@@ -165,6 +173,26 @@ export function TransactionsPage() {
   const openEdit = (t: LocalTransaction) => {
     setEditing(t);
     setOpened(true);
+  };
+
+  // Abre o form de recorrência pré-preenchido a partir de um lançamento. A
+  // transação existente é vinculada (não recriada) e só ocorrências futuras
+  // são materializadas — sem duplicar o valor já lançado.
+  const openRecurring = (t: LocalTransaction) => {
+    const day = new Date(t.date).getUTCDate();
+    setRecurringFrom({
+      initial: {
+        type: t.type as 'INCOME' | 'EXPENSE',
+        accountId: t.accountId ? accIdMap.get(t.accountId) ?? null : null,
+        categoryId: t.categoryId ? catIdMap.get(t.categoryId) ?? null : null,
+        description: t.description,
+        amount: Math.abs(Number(t.amount)),
+        frequency: 'MONTHLY',
+        anchorDay: Number.isFinite(day) ? day : null,
+        startDate: new Date(t.date),
+      },
+      linkIds: t.id ? [t.id] : [],
+    });
   };
 
   const remove = async (t: LocalTransaction) => {
@@ -276,6 +304,10 @@ export function TransactionsPage() {
             </Button>
           )}
         </div>
+      )}
+
+      {activeId && (
+        <SuggestedRecurringSection workspaceId={activeId} accounts={accounts} categories={categories} />
       )}
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
@@ -461,6 +493,12 @@ export function TransactionsPage() {
                           <Pencil className="h-4 w-4" />
                           Editar
                         </DropdownMenuItem>
+                        {!transfer && t.accountId && (
+                          <DropdownMenuItem onClick={() => openRecurring(t)} disabled={!t.id}>
+                            <RefreshCw className="h-4 w-4" />
+                            Criar recorrência
+                          </DropdownMenuItem>
+                        )}
                         {isDupe && (
                           <>
                             <DropdownMenuSeparator />
@@ -564,6 +602,18 @@ export function TransactionsPage() {
             editing={editing}
           />
           <ImportAiModal opened={importOpened} onClose={() => setImportOpened(false)} workspaceId={activeId} />
+          {recurringFrom && (
+            <RecurringFormModal
+              opened={!!recurringFrom}
+              onClose={() => setRecurringFrom(null)}
+              workspaceId={activeId}
+              accounts={accounts}
+              categories={categories}
+              initial={recurringFrom.initial}
+              linkTransactionIds={recurringFrom.linkIds}
+              title="Criar recorrência"
+            />
+          )}
           <ConsistencyCheckModal
             opened={checkOpened}
             onClose={() => setCheckOpened(false)}

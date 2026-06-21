@@ -29,6 +29,7 @@ import type {
   MyInvitation,
   ProfileUpdateInput,
   RecurrenceFrequency,
+  RecurringSuggestion,
   RecurringTransaction,
   Transaction,
   TxShare,
@@ -241,11 +242,16 @@ export interface RecurringInput {
   startDate: string;
   endDate?: string | null;
   autoConfirm?: boolean;
+  /** Ids de transações existentes da série, p/ vincular (sem duplicar valores). */
+  linkTransactionIds?: string[];
 }
 
 export const recurringApi = {
   list: (ws: string) =>
     api.get<{ items: RecurringTransaction[] }>(wsPath(ws, '/recurring')),
+  // Séries regulares detectadas no extrato ainda sem recorrência cadastrada.
+  suggestions: (ws: string) =>
+    api.get<{ suggestions: RecurringSuggestion[] }>(wsPath(ws, '/recurring/suggestions')),
   create: (ws: string, body: RecurringInput) =>
     api.post<{ recurring: RecurringTransaction }>(wsPath(ws, '/recurring'), body),
   update: (ws: string, id: string, body: Partial<RecurringInput> & { isActive?: boolean }) =>
