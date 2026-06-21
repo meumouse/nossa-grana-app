@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import {
   Plus,
   MoreVertical,
@@ -18,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -81,6 +83,7 @@ export function TransactionsPage() {
   const [accountFilter, setAccountFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [range, setRange] = useState<DateRange | undefined>(undefined);
 
   const [opened, setOpened] = useState(false);
   const [importOpened, setImportOpened] = useState(false);
@@ -125,24 +128,34 @@ export function TransactionsPage() {
   const [removingDupes, setRemovingDupes] = useState(false);
 
   const filtersActive =
-    search.trim() !== '' || accountFilter !== 'ALL' || categoryFilter !== 'ALL' || typeFilter !== 'ALL';
+    search.trim() !== '' ||
+    accountFilter !== 'ALL' ||
+    categoryFilter !== 'ALL' ||
+    typeFilter !== 'ALL' ||
+    Boolean(range?.from || range?.to);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const fromStr = range?.from ? format(range.from, 'yyyy-MM-dd') : null;
+    const toStr = range?.to ? format(range.to, 'yyyy-MM-dd') : null;
     return txs.filter((t) => {
       if (accountFilter !== 'ALL' && t.accountId !== accountFilter) return false;
       if (categoryFilter !== 'ALL' && (t.categoryId ?? '') !== categoryFilter) return false;
       if (typeFilter !== 'ALL' && t.type !== typeFilter) return false;
       if (q && !`${t.description} ${t.notes ?? ''}`.toLowerCase().includes(q)) return false;
+      const day = t.date.slice(0, 10);
+      if (fromStr && day < fromStr) return false;
+      if (toStr && day > toStr) return false;
       return true;
     });
-  }, [txs, search, accountFilter, categoryFilter, typeFilter]);
+  }, [txs, search, accountFilter, categoryFilter, typeFilter, range]);
 
   const clearFilters = () => {
     setSearch('');
     setAccountFilter('ALL');
     setCategoryFilter('ALL');
     setTypeFilter('ALL');
+    setRange(undefined);
   };
 
   const openNew = () => {
@@ -283,7 +296,8 @@ export function TransactionsPage() {
             className="pl-9"
           />
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <DateRangePicker value={range} onChange={setRange} />
           <Select value={accountFilter} onValueChange={setAccountFilter}>
             <SelectTrigger>
               <SelectValue placeholder="Conta" />
