@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Calendar as CalendarIcon, Check, CreditCard, Loader2, Plus, Search, Trash2, Undo2, Users, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, CreditCard, Loader2, Pencil, Plus, Search, Trash2, Undo2, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -52,13 +52,22 @@ export function InstallmentsPage() {
   const accounts = useLiveAccounts(activeId) ?? [];
   const cards = (useLiveCards(activeId) ?? []).filter((c) => !c.archived);
   const categories = useLiveCategories(activeId) ?? [];
+  const liveTxs = useLiveTransactions(activeId) ?? [];
 
   const ownerName = user?.name?.trim() || 'Você';
 
   const [opened, setOpened] = useState(false);
+  // Quando preenchido, o diálogo está editando um parcelamento existente.
+  const [editId, setEditId] = useState<string | null>(null);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  // Plano em edição tem parcela paga fora do prefixo (ex.: 3ª paga, 1ª/2ª não).
+  // O recálculo segue o modelo de prefixo, então avisamos o usuário.
+  const [paidGap, setPaidGap] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [accountFilter, setAccountFilter] = useState('ALL');
+  const [cardFilter, setCardFilter] = useState('ALL');
   // Origem: conta ou cartão, codificada em "acc:<id>" / "card:<id>".
   const [source, setSource] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -99,7 +108,7 @@ export function InstallmentsPage() {
   const isShared = others.length > 0;
   const peopleCount = Math.max(shareCount, shares.length);
 
-  const create = useMutation({
+  const save = useMutation({
     mutationFn: async () => {
       // Cadastra nomes novos nas settings (best-effort, p/ autocomplete futuro).
       if (isShared) {
@@ -111,13 +120,13 @@ export function InstallmentsPage() {
             await workspaceApi.updateSettings(activeId!, { sharedContacts: merged });
             setContacts(merged);
           } catch {
-            // não bloqueia a criação do parcelamento.
+            // não bloqueia o salvamento do parcelamento.
           }
         }
       }
       const isCard = source.startsWith('card:');
       const ownerId = source.slice(source.indexOf(':') + 1);
-      return installmentApi.create(activeId!, {
+      const body = {
         accountId: isCard ? undefined : ownerId,
         creditCardId: isCard ? ownerId : undefined,
         description: description.trim(),
@@ -128,12 +137,18 @@ export function InstallmentsPage() {
         categoryId: categoryId || null,
         shares: isShared ? shares : null,
         shareCount: isShared ? peopleCount : null,
-      });
+      };
+      return editId
+        ? installmentApi.update(activeId!, editId, body)
+        : installmentApi.create(activeId!, body);
     },
     onSuccess: () => {
+      toast.success(editId ? 'Parcelamento atualizado' : 'Parcelamento criado');
       setOpened(false);
+      setEditId(null);
       invalidate();
-      toast.success('Parcelamento criado');
+      // Atualiza também o detalhe (parcelas regeradas) caso esteja aberto.
+      qc.invalidateQueries({ queryKey: ['installment', activeId] });
     },
     onError: handleError,
   });
@@ -150,6 +165,7 @@ export function InstallmentsPage() {
   const openNew = () => {
     const firstAcc = accounts[0];
     const firstCard = cards[0];
+    setEditId(null);
     setSource(
       firstAcc
         ? accVal(firstAcc.id ?? firstAcc.key)
@@ -166,7 +182,58 @@ export function InstallmentsPage() {
     setShares([ownerRow(ownerName)]);
     setShareCount(1);
     setNewName('');
+    setPaidGap(false);
     setOpened(true);
+  };
+
+  // Abre o diálogo em modo edição, pré-preenchendo com os dados do plano. O
+  // número/vencimento da "parcela atual" é derivado das parcelas já quitadas.
+  const openEdit = async (id: string) => {
+    if (!activeId) return;
+    setLoadingEdit(true);
+    try {
+      const { plan } = await installmentApi.get(activeId, id);
+      const txs = (plan.transactions ?? [])
+        .slice()
+        .sort((a, b) => (a.installmentNumber ?? 0) - (b.installmentNumber ?? 0));
+      // Prefixo contíguo de parcelas pagas (a partir da 1ª). Se houver parcela
+      // paga além desse prefixo, o recálculo (modelo de prefixo) não a preserva.
+      let leadingPaid = 0;
+      for (const t of txs) {
+        if (t.status === 'COMPLETED') leadingPaid += 1;
+        else break;
+      }
+      const totalPaid = txs.filter((t) => t.status === 'COMPLETED').length;
+      setPaidGap(totalPaid > leadingPaid);
+      const start = Math.min(Math.max(leadingPaid + 1, 1), plan.installments);
+      const startTx = txs.find((t) => t.installmentNumber === start);
+      const firstDue = startTx?.dueDate ?? startTx?.date ?? plan.firstDueDate;
+      const ref = txs[0];
+      const src = ref?.creditCardId
+        ? cardVal(ref.creditCardId)
+        : ref?.accountId
+          ? accVal(ref.accountId)
+          : '';
+      const planShares =
+        plan.shared && plan.shares && plan.shares.length > 0 ? plan.shares : [ownerRow(ownerName)];
+      setEditId(id);
+      setSource(src);
+      setCategoryId(plan.categoryId ?? '');
+      setDescription(plan.description);
+      setTotalAmount(String(plan.totalAmount).replace('.', ','));
+      setInstallments(String(plan.installments));
+      setStartInstallment(String(start));
+      setFirstDueDate(new Date(firstDue));
+      setShares(planShares);
+      setShareCount(Math.max(plan.shareCount ?? planShares.length, planShares.length));
+      setNewName('');
+      setDetailId(null);
+      setOpened(true);
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setLoadingEdit(false);
+    }
   };
 
   const addPerson = (raw: string) => {
@@ -201,19 +268,40 @@ export function InstallmentsPage() {
   const expenseCats = categories.filter((c) => c.kind === 'EXPENSE');
   const allItems = data?.items ?? [];
 
-  const filtersActive = search.trim() !== '' || categoryFilter !== 'ALL';
+  // O plano não guarda conta/cartão — a origem vive nas parcelas (transações).
+  // Mapeia planId → { accountId, creditCardId } a partir dos dados locais.
+  const planSource = useMemo(() => {
+    const m = new Map<string, { accountId: string | null; creditCardId: string | null }>();
+    for (const t of liveTxs) {
+      const pid = t.installmentPlanId;
+      if (pid && !m.has(pid)) {
+        m.set(pid, { accountId: t.accountId ?? null, creditCardId: t.creditCardId ?? null });
+      }
+    }
+    return m;
+  }, [liveTxs]);
+
+  const filtersActive =
+    search.trim() !== '' ||
+    categoryFilter !== 'ALL' ||
+    accountFilter !== 'ALL' ||
+    cardFilter !== 'ALL';
   const items = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allItems.filter((p) => {
       if (categoryFilter !== 'ALL' && p.categoryId !== categoryFilter) return false;
       if (q && !p.description.toLowerCase().includes(q)) return false;
+      if (accountFilter !== 'ALL' && planSource.get(p.id)?.accountId !== accountFilter) return false;
+      if (cardFilter !== 'ALL' && planSource.get(p.id)?.creditCardId !== cardFilter) return false;
       return true;
     });
-  }, [allItems, search, categoryFilter]);
+  }, [allItems, search, categoryFilter, accountFilter, cardFilter, planSource]);
 
   const clearFilters = () => {
     setSearch('');
     setCategoryFilter('ALL');
+    setAccountFilter('ALL');
+    setCardFilter('ALL');
   };
 
   return (
@@ -227,8 +315,8 @@ export function InstallmentsPage() {
       </div>
 
       {!isLoading && !isError && allItems.length > 0 && (
-        <div className="space-y-2">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[200px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar por descrição"
@@ -237,27 +325,55 @@ export function InstallmentsPage() {
               className="pl-9"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Categoria" />
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas as categorias</SelectItem>
+              {expenseCats.map((c) => (
+                <SelectItem key={c.key} value={c.id ?? c.key}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {accounts.length > 0 && (
+            <Select value={accountFilter} onValueChange={setAccountFilter}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue placeholder="Conta" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Todas as categorias</SelectItem>
-                {expenseCats.map((c) => (
+                <SelectItem value="ALL">Todas as contas</SelectItem>
+                {accounts.map((a) => (
+                  <SelectItem key={a.key} value={a.id ?? a.key}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {cards.length > 0 && (
+            <Select value={cardFilter} onValueChange={setCardFilter}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue placeholder="Cartão" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos os cartões</SelectItem>
+                {cards.map((c) => (
                   <SelectItem key={c.key} value={c.id ?? c.key}>
                     {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {filtersActive && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4" />
-                Limpar
-              </Button>
-            )}
-          </div>
+          )}
+          {filtersActive && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="h-4 w-4" />
+              Limpar
+            </Button>
+          )}
         </div>
       )}
 
@@ -299,6 +415,18 @@ export function InstallmentsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Editar"
+                  disabled={loadingEdit}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void openEdit(p.id);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 text-muted-foreground" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   aria-label="Excluir"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -313,10 +441,18 @@ export function InstallmentsPage() {
         </div>
       )}
 
-      <Dialog open={opened} onOpenChange={(o) => !o && setOpened(false)}>
+      <Dialog
+        open={opened}
+        onOpenChange={(o) => {
+          if (!o) {
+            setOpened(false);
+            setEditId(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Novo parcelamento</DialogTitle>
+            <DialogTitle>{editId ? 'Editar parcelamento' : 'Novo parcelamento'}</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -328,7 +464,7 @@ export function InstallmentsPage() {
               if (Number(installments) < 2) return toast.error('Mínimo de 2 parcelas');
               if (Number(startInstallment) > Number(installments))
                 return toast.error('A parcela atual não pode ser maior que o total');
-              create.mutate();
+              save.mutate();
             }}
             className="space-y-4"
           >
@@ -527,9 +663,23 @@ export function InstallmentsPage() {
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={create.isPending}>
-              {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Criar
+            {editId && (
+              <p className="text-xs text-muted-foreground">
+                As parcelas serão recalculadas com os novos valores e datas.
+              </p>
+            )}
+            {editId && paidGap && (
+              <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-400">
+                Este parcelamento tem parcelas pagas fora de ordem (uma parcela
+                posterior foi quitada antes de anteriores). Ao salvar, apenas as{' '}
+                {Number(startInstallment) - 1 > 0 ? `${Number(startInstallment) - 1} primeiras` : '0'}{' '}
+                parcelas continuarão marcadas como pagas — confira o campo
+                “Parcela atual”.
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={save.isPending}>
+              {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editId ? 'Salvar alterações' : 'Criar'}
             </Button>
           </form>
         </DialogContent>
@@ -539,6 +689,7 @@ export function InstallmentsPage() {
         wsId={activeId}
         planId={detailId}
         hidden={hidden}
+        onEdit={(id) => void openEdit(id)}
         onClose={() => setDetailId(null)}
       />
     </div>
@@ -549,11 +700,13 @@ function InstallmentDetail({
   wsId,
   planId,
   hidden,
+  onEdit,
   onClose,
 }: {
   wsId: string | null;
   planId: string | null;
   hidden: boolean;
+  onEdit: (id: string) => void;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -655,9 +808,15 @@ function InstallmentDetail({
           </div>
         ) : (
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Total {formatMoney(plan.totalAmount, hidden)} em {plan.installments}x
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                Total {formatMoney(plan.totalAmount, hidden)} em {plan.installments}x
+              </p>
+              <Button variant="outline" size="sm" className="h-8" onClick={() => onEdit(plan.id)}>
+                <Pencil className="h-3.5 w-3.5" />
+                Editar
+              </Button>
+            </div>
 
             {plan.shared && plan.shares && plan.shares.length > 0 && (
               <div className="space-y-1.5 rounded-md border p-3">

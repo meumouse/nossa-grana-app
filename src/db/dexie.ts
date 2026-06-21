@@ -121,6 +121,8 @@ export interface LocalTransaction {
   transferId: string | null;
   counterAccountId: string | null;
   counterCreditCardId: string | null;
+  // Parcelamento de origem (quando a transação é uma parcela).
+  installmentPlanId?: string | null;
   // Duplicidade: usuário confirmou que NÃO é duplicata (silencia o alerta).
   duplicateDismissed?: boolean;
   // Compartilhamento/divisão da conta entre pessoas.

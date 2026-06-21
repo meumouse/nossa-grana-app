@@ -187,6 +187,7 @@ async function putTransaction(t: Transaction): Promise<void> {
     transferId: t.transferId,
     counterAccountId: t.counterAccountId,
     counterCreditCardId: t.counterCreditCardId,
+    installmentPlanId: t.installmentPlanId ?? null,
     duplicateDismissed: t.duplicateDismissed ?? false,
     shared: t.shared ?? false,
     shareCount: t.shareCount ?? null,

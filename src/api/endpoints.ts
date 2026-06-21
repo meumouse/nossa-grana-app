@@ -274,6 +274,8 @@ export const installmentApi = {
     api.get<{ plan: InstallmentPlan }>(wsPath(ws, `/installments/${id}`)),
   create: (ws: string, body: InstallmentInput) =>
     api.post<{ plan: InstallmentPlan }>(wsPath(ws, '/installments'), body),
+  update: (ws: string, id: string, body: InstallmentInput) =>
+    api.patch<{ plan: InstallmentPlan }>(wsPath(ws, `/installments/${id}`), body),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/installments/${id}`)),
 };
 
