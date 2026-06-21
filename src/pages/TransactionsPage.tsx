@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, MoreVertical, Pencil, Trash2, Check } from 'lucide-react';
+import { Plus, MoreVertical, Pencil, Trash2, Check, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -18,6 +18,7 @@ import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
 import { deleteTransactionLocal, payTransactionLocal } from '@/sync/mutations';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
+import { ImportAiModal } from '@/components/ImportAiModal';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { LocalTransaction } from '@/db/dexie';
 
@@ -33,6 +34,7 @@ export function TransactionsPage() {
   const txs = useLiveTransactions(activeId, filter === 'ALL' ? {} : { status: filter }) ?? [];
 
   const [opened, setOpened] = useState(false);
+  const [importOpened, setImportOpened] = useState(false);
   const [editing, setEditing] = useState<LocalTransaction | null>(null);
 
   const accMap = useMemo(() => new Map(accounts.map((a) => [a.key, a.name])), [accounts]);
@@ -63,10 +65,16 @@ export function TransactionsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Lançamentos</h1>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4" />
-          Novo
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportOpened(true)}>
+            <Sparkles className="h-4 w-4" />
+            Importar com IA
+          </Button>
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4" />
+            Novo
+          </Button>
+        </div>
       </div>
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
@@ -142,14 +150,21 @@ export function TransactionsPage() {
       )}
 
       {activeId && (
-        <TransactionFormModal
-          opened={opened}
-          onClose={() => setOpened(false)}
-          workspaceId={activeId}
-          accounts={accounts}
-          categories={categories}
-          editing={editing}
-        />
+        <>
+          <TransactionFormModal
+            opened={opened}
+            onClose={() => setOpened(false)}
+            workspaceId={activeId}
+            accounts={accounts}
+            categories={categories}
+            editing={editing}
+          />
+          <ImportAiModal
+            opened={importOpened}
+            onClose={() => setImportOpened(false)}
+            workspaceId={activeId}
+          />
+        </>
       )}
     </div>
   );

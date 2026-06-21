@@ -20,7 +20,6 @@ import { InstallmentsPage } from './pages/InstallmentsPage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { InvestmentsPage } from './pages/InvestmentsPage';
 import { ForecastPage } from './pages/ForecastPage';
-import { ImportPage } from './pages/ImportPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 function FullLoader() {
@@ -75,7 +74,6 @@ function AppRoutes() {
         <Route path="/invoices" element={<InvoicesPage />} />
         <Route path="/investments" element={<InvestmentsPage />} />
         <Route path="/forecast" element={<ForecastPage />} />
-        <Route path="/import" element={<ImportPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

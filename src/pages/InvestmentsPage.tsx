@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -274,9 +275,8 @@ export function InvestmentsPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ast-price">Cotação atual (opcional)</Label>
-              <Input
+              <CurrencyInput
                 id="ast-price"
-                inputMode="decimal"
                 placeholder="0,00"
                 value={lastPrice}
                 onChange={(e) => setLastPrice(e.target.value)}
@@ -367,16 +367,15 @@ export function InvestmentsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="iv-price">Preço unit.</Label>
-                <Input
+                <CurrencyInput
                   id="iv-price"
-                  inputMode="decimal"
                   value={unitPrice}
                   onChange={(e) => setUnitPrice(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="iv-fees">Taxas</Label>
-                <Input id="iv-fees" inputMode="decimal" value={fees} onChange={(e) => setFees(e.target.value)} />
+                <CurrencyInput id="iv-fees" value={fees} onChange={(e) => setFees(e.target.value)} />
               </div>
             </div>
             <div className="space-y-1.5">

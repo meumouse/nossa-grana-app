@@ -27,6 +27,7 @@ export interface LocalAccount {
   name: string;
   type: AccountType;
   currency: string;
+  institutionId: string | null;
   iconColor: string | null;
   openingBalance: Money;
   includeInTotal: boolean;
@@ -40,6 +41,20 @@ export interface LocalAccount {
   overdraftInterestRate: Money | null;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+/**
+ * Catálogo de instituições (bancos) cacheado localmente para render offline.
+ * Atualizado a cada sync online (engine.refreshInstitutions). Inclui as globais
+ * (workspaceId = null) e as customizadas do workspace.
+ */
+export interface LocalInstitution {
+  id: string;
+  workspaceId: string | null;
+  name: string;
+  shortName: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
 }
 
 export interface LocalCategory {
@@ -102,6 +117,7 @@ class NossaGranaDB extends Dexie {
   accounts!: Table<LocalAccount, string>;
   categories!: Table<LocalCategory, string>;
   transactions!: Table<LocalTransaction, string>;
+  institutions!: Table<LocalInstitution, string>;
   outbox!: Table<OutboxItem, number>;
   meta!: Table<MetaRow, string>;
 
@@ -113,6 +129,10 @@ class NossaGranaDB extends Dexie {
       transactions: 'key, id, clientId, workspaceId, accountId, status, date',
       outbox: '++seq, clientId, entity, workspaceId',
       meta: 'key',
+    });
+    // v2: catálogo de instituições (bancos) cacheado p/ render offline.
+    this.version(2).stores({
+      institutions: 'id, workspaceId',
     });
   }
 }

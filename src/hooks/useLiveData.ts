@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type LocalAccount, type LocalTransaction } from '../db/dexie';
+import { db, type LocalAccount, type LocalInstitution, type LocalTransaction } from '../db/dexie';
 import { toCents } from '../lib/format';
 
 /** Contas ativas (não arquivadas/excluídas) do workspace, ordenadas. */

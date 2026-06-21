@@ -78,6 +78,16 @@ export interface WorkspaceSettingsInput {
   llmApiKey?: string;
 }
 
+/** Instituição financeira (banco). Catálogo global (seed) + customizadas do workspace. */
+export interface Institution {
+  id: string;
+  name: string;
+  shortName: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
+  workspaceId: string | null;
+}
+
 export interface Account {
   id: string;
   clientId: string | null;
@@ -85,6 +95,8 @@ export interface Account {
   name: string;
   type: AccountType;
   currency: string;
+  institutionId: string | null;
+  institution?: Pick<Institution, 'id' | 'name' | 'brandColor' | 'logoUrl'> | null;
   iconColor: string | null;
   openingBalance: Money;
   includeInTotal: boolean;

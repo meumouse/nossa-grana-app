@@ -11,6 +11,7 @@ import type {
   ImportBatch,
   ImportItem,
   InstallmentPlan,
+  Institution,
   LlmModelInfo,
   LlmProvider,
   InvestmentAsset,
@@ -71,6 +72,11 @@ export const accountApi = {
   update: (ws: string, id: string, body: Partial<Account>) =>
     api.patch<{ account: Account }>(wsPath(ws, `/accounts/${id}`), body),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/accounts/${id}`)),
+};
+
+// ---- Institutions / bancos (online, catálogo) ----
+export const institutionApi = {
+  list: (ws: string) => api.get<{ institutions: Institution[] }>(wsPath(ws, '/institutions')),
 };
 
 // ---- Categories (online) ----

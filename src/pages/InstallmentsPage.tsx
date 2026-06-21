@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -179,9 +180,8 @@ export function InstallmentsPage() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label htmlFor="ins-total">Valor total</Label>
-                <Input
+                <CurrencyInput
                   id="ins-total"
-                  inputMode="decimal"
                   placeholder="0,00"
                   value={totalAmount}
                   onChange={(e) => setTotalAmount(e.target.value)}

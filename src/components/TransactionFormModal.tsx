@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -112,9 +113,8 @@ export function TransactionFormModal({ opened, onClose, workspaceId, accounts, c
 
           <div className="space-y-1.5">
             <Label htmlFor="amount">Valor</Label>
-            <Input
+            <CurrencyInput
               id="amount"
-              inputMode="decimal"
               placeholder="0,00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}

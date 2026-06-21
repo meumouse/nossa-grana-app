@@ -11,7 +11,6 @@ import {
   Receipt,
   TrendingUp,
   LineChart,
-  Sparkles,
   Settings,
   Eye,
   EyeOff,
@@ -52,7 +51,6 @@ const LINKS = [
   { to: '/invoices', label: 'Faturas', icon: Receipt },
   { to: '/investments', label: 'Investimentos', icon: TrendingUp },
   { to: '/forecast', label: 'Previsão', icon: LineChart },
-  { to: '/import', label: 'Importar (IA)', icon: Sparkles },
   { to: '/settings', label: 'Configurações', icon: Settings },
 ];
 

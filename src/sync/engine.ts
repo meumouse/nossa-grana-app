@@ -1,5 +1,5 @@
 import { db } from '../db/dexie';
-import { syncApi } from '../api/endpoints';
+import { institutionApi, syncApi } from '../api/endpoints';
 import type { Account, Category, Transaction } from '../api/types';
 
 const META_PULL = (ws: string) => `pull:${ws}`;
@@ -84,6 +84,7 @@ async function putAccount(a: Account): Promise<void> {
     name: a.name,
     type: a.type,
     currency: a.currency,
+    institutionId: a.institutionId ?? null,
     iconColor: a.iconColor,
     openingBalance: a.openingBalance,
     includeInTotal: a.includeInTotal,
@@ -167,10 +168,37 @@ async function pullDelta(ws: string): Promise<number> {
   return res.accounts.length + res.categories.length + res.transactions.length;
 }
 
-/** Sincronização completa: envia o outbox e puxa o delta. */
+/**
+ * Atualiza o catálogo de instituições (bancos) cacheado p/ render offline.
+ * Substitui o conjunto do workspace (globais + customizadas) a cada sync.
+ * Best-effort: falha aqui não interrompe a sincronização principal.
+ */
+async function refreshInstitutions(ws: string): Promise<void> {
+  try {
+    const { institutions } = await institutionApi.list(ws);
+    await db.transaction('rw', db.institutions, async () => {
+      await db.institutions.clear();
+      await db.institutions.bulkPut(
+        institutions.map((i) => ({
+          id: i.id,
+          workspaceId: i.workspaceId,
+          name: i.name,
+          shortName: i.shortName,
+          logoUrl: i.logoUrl,
+          brandColor: i.brandColor,
+        })),
+      );
+    });
+  } catch {
+    // offline ou falha de rede: mantém o cache anterior.
+  }
+}
+
+/** Sincronização completa: envia o outbox, puxa o delta e atualiza bancos. */
 export async function runSync(ws: string): Promise<{ pushed: number; pulled: number }> {
   const pushed = await pushOutbox(ws);
   const pulled = await pullDelta(ws);
+  await refreshInstitutions(ws);
   return { pushed, pulled };
 }
 

@@ -3,6 +3,7 @@ import { Plus, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -274,9 +275,8 @@ export function AccountsPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="acc-balance">Saldo inicial</Label>
-              <Input
+              <CurrencyInput
                 id="acc-balance"
-                inputMode="decimal"
                 value={openingBalance}
                 onChange={(e) => setOpeningBalance(e.target.value)}
               />
@@ -287,9 +287,8 @@ export function AccountsPage() {
                 <p className="text-sm font-medium">Cartão de crédito</p>
                 <div className="space-y-1.5">
                   <Label htmlFor="acc-limit">Limite do cartão</Label>
-                  <Input
+                  <CurrencyInput
                     id="acc-limit"
-                    inputMode="decimal"
                     placeholder="Ex.: 5000,00"
                     value={creditLimit}
                     onChange={(e) => setCreditLimit(e.target.value)}
@@ -335,9 +334,8 @@ export function AccountsPage() {
                 <p className="text-sm font-medium">Limite da conta</p>
                 <div className="space-y-1.5">
                   <Label htmlFor="acc-lis">LIS (limite da conta)</Label>
-                  <Input
+                  <CurrencyInput
                     id="acc-lis"
-                    inputMode="decimal"
                     placeholder="Ex.: 2000,00"
                     value={overdraftLimit}
                     onChange={(e) => setOverdraftLimit(e.target.value)}
