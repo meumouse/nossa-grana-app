@@ -25,6 +25,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
@@ -34,7 +42,7 @@ import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
 import { deleteTransactionLocal, dismissDuplicateLocal, payTransactionLocal } from '@/sync/mutations';
 import { workspaceApi } from '@/api/endpoints';
-import { detectDuplicates } from '@/lib/duplicates';
+import { detectDuplicates, redundantDuplicates } from '@/lib/duplicates';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
 import { ImportAiModal } from '@/components/ImportAiModal';
 import { ShareTransactionModal } from '@/components/ShareTransactionModal';
@@ -105,6 +113,10 @@ export function TransactionsPage() {
   );
   const catMap = useMemo(() => new Map(categories.map((c) => [c.key, c])), [categories]);
   const dupes = useMemo(() => detectDuplicates(txs), [txs]);
+  // Cópias redundantes (mantém uma por grupo) — alvo do "Remover duplicadas".
+  const removableDupes = useMemo(() => redundantDuplicates(txs), [txs]);
+  const [removeDupesOpen, setRemoveDupesOpen] = useState(false);
+  const [removingDupes, setRemovingDupes] = useState(false);
 
   const filtersActive =
     search.trim() !== '' || accountFilter !== 'ALL' || categoryFilter !== 'ALL' || typeFilter !== 'ALL';
@@ -146,6 +158,27 @@ export function TransactionsPage() {
     await payTransactionLocal(t.key);
     void syncNow();
     toast.success('Lançamento efetivado');
+  };
+
+  const confirmRemoveDuplicates = async () => {
+    if (removableDupes.length === 0) return;
+    setRemovingDupes(true);
+    try {
+      for (const t of removableDupes) {
+        await deleteTransactionLocal(t.key);
+      }
+      void syncNow();
+      toast.success(
+        removableDupes.length === 1
+          ? '1 duplicada removida'
+          : `${removableDupes.length} duplicadas removidas`,
+      );
+      setRemoveDupesOpen(false);
+    } catch {
+      toast.error('Não foi possível remover as duplicadas');
+    } finally {
+      setRemovingDupes(false);
+    }
   };
 
   const keepNotDuplicate = async (t: LocalTransaction) => {
@@ -200,12 +233,23 @@ export function TransactionsPage() {
       </div>
 
       {dupes.size > 0 && (
-        <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>
+          <span className="min-w-0 flex-1">
             {dupes.size} {dupes.size === 1 ? 'lançamento com' : 'lançamentos com'} possível duplicidade. Revise os
             marcados abaixo.
           </span>
+          {removableDupes.length > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="shrink-0"
+              onClick={() => setRemoveDupesOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              Remover duplicadas
+            </Button>
+          )}
         </div>
       )}
 
@@ -426,6 +470,55 @@ export function TransactionsPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={removeDupesOpen} onOpenChange={(o) => !removingDupes && setRemoveDupesOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remover duplicadas</DialogTitle>
+            <DialogDescription>
+              {removableDupes.length === 1
+                ? 'Será removida 1 cópia redundante, mantendo o lançamento original. Esta ação não pode ser desfeita.'
+                : `Serão removidas ${removableDupes.length} cópias redundantes, mantendo um lançamento de cada grupo. Esta ação não pode ser desfeita.`}
+            </DialogDescription>
+          </DialogHeader>
+          {removableDupes.length > 0 && (
+            <div className="max-h-60 space-y-1 overflow-y-auto rounded-md border p-2">
+              {removableDupes.map((t) => {
+                const income = t.type === 'INCOME';
+                return (
+                  <div key={t.key} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate">
+                      {t.description}
+                      <span className="text-muted-foreground">
+                        {' · '}
+                        {formatDate(t.date)}
+                      </span>
+                    </span>
+                    <span
+                      className={cn(
+                        'whitespace-nowrap font-medium',
+                        income ? 'text-success' : 'text-destructive',
+                      )}
+                    >
+                      {income ? '+' : '−'}
+                      {formatMoney(Math.abs(Number(t.amount)), hidden)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveDupesOpen(false)} disabled={removingDupes}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={() => void confirmRemoveDuplicates()} disabled={removingDupes}>
+              <Trash2 className="h-4 w-4" />
+              {removingDupes ? 'Removendo…' : 'Remover'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {activeId && (
         <>
