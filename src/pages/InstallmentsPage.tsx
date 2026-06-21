@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, Loader2, Plus, Trash2 } from 'lucide-react';
+import { CreditCard, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -38,6 +38,8 @@ export function InstallmentsPage() {
 
   const [opened, setOpened] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');
@@ -91,7 +93,22 @@ export function InstallmentsPage() {
   };
 
   const expenseCats = categories.filter((c) => c.kind === 'EXPENSE');
-  const items = data?.items ?? [];
+  const allItems = data?.items ?? [];
+
+  const filtersActive = search.trim() !== '' || categoryFilter !== 'ALL';
+  const items = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allItems.filter((p) => {
+      if (categoryFilter !== 'ALL' && p.categoryId !== categoryFilter) return false;
+      if (q && !p.description.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [allItems, search, categoryFilter]);
+
+  const clearFilters = () => {
+    setSearch('');
+    setCategoryFilter('ALL');
+  };
 
   return (
     <div className="space-y-4">
@@ -103,6 +120,41 @@ export function InstallmentsPage() {
         </Button>
       </div>
 
+      {!isLoading && !isError && allItems.length > 0 && (
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por descrição"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todas as categorias</SelectItem>
+                {expenseCats.map((c) => (
+                  <SelectItem key={c.key} value={c.id ?? c.key}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {filtersActive && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X className="h-4 w-4" />
+                Limpar
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-7 w-7 animate-spin text-primary" />
@@ -111,9 +163,13 @@ export function InstallmentsPage() {
         <p className="py-10 text-center text-sm text-muted-foreground">
           Não foi possível carregar os parcelamentos.
         </p>
-      ) : items.length === 0 ? (
+      ) : allItems.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
           Nenhum parcelamento. Divida uma compra em parcelas.
+        </p>
+      ) : items.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          Nenhum parcelamento corresponde aos filtros.
         </p>
       ) : (
         <div className="space-y-2">

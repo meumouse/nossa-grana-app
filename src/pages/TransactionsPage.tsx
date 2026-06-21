@@ -9,11 +9,14 @@ import {
   Users,
   AlertTriangle,
   CheckSquare,
+  Search,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -58,6 +61,12 @@ export function TransactionsPage() {
   const [filter, setFilter] = useState<StatusFilter>('ALL');
   const txs = useLiveTransactions(activeId, filter === 'ALL' ? {} : { status: filter }) ?? [];
 
+  // Filtros de localização (texto, conta, categoria, tipo).
+  const [search, setSearch] = useState('');
+  const [accountFilter, setAccountFilter] = useState('ALL');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState('ALL');
+
   const [opened, setOpened] = useState(false);
   const [importOpened, setImportOpened] = useState(false);
   const [checkOpened, setCheckOpened] = useState(false);
@@ -87,6 +96,27 @@ export function TransactionsPage() {
   const accMap = useMemo(() => new Map(accounts.map((a) => [a.key, a.name])), [accounts]);
   const catMap = useMemo(() => new Map(categories.map((c) => [c.key, c])), [categories]);
   const dupes = useMemo(() => detectDuplicates(txs), [txs]);
+
+  const filtersActive =
+    search.trim() !== '' || accountFilter !== 'ALL' || categoryFilter !== 'ALL' || typeFilter !== 'ALL';
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return txs.filter((t) => {
+      if (accountFilter !== 'ALL' && t.accountId !== accountFilter) return false;
+      if (categoryFilter !== 'ALL' && (t.categoryId ?? '') !== categoryFilter) return false;
+      if (typeFilter !== 'ALL' && t.type !== typeFilter) return false;
+      if (q && !`${t.description} ${t.notes ?? ''}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [txs, search, accountFilter, categoryFilter, typeFilter]);
+
+  const clearFilters = () => {
+    setSearch('');
+    setAccountFilter('ALL');
+    setCategoryFilter('ALL');
+    setTypeFilter('ALL');
+  };
 
   const openNew = () => {
     setEditing(null);
@@ -178,11 +208,77 @@ export function TransactionsPage() {
         </TabsList>
       </Tabs>
 
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por descrição ou observação"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <Select value={accountFilter} onValueChange={setAccountFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Conta" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas as contas</SelectItem>
+              {accounts.map((a) => (
+                <SelectItem key={a.key} value={a.key}>
+                  {a.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas as categorias</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c.key} value={c.key}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos os tipos</SelectItem>
+              <SelectItem value="INCOME">Receitas</SelectItem>
+              <SelectItem value="EXPENSE">Despesas</SelectItem>
+              <SelectItem value="TRANSFER">Transferências</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {filtersActive && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              {visible.length} {visible.length === 1 ? 'resultado' : 'resultados'}
+            </span>
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="h-4 w-4" />
+              Limpar filtros
+            </Button>
+          </div>
+        )}
+      </div>
+
       {txs.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">Nenhum lançamento ainda. Toque em “Novo”.</p>
+      ) : visible.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          Nenhum lançamento corresponde aos filtros.
+        </p>
       ) : (
         <div className="space-y-2 pb-20">
-          {txs.map((t) => {
+          {visible.map((t) => {
             const cat = t.categoryId ? catMap.get(t.categoryId) : null;
             const income = t.type === 'INCOME';
             const transfer = t.type === 'TRANSFER';
