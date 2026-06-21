@@ -5,6 +5,7 @@ import {
   Pencil,
   Trash2,
   Check,
+  Undo2,
   Sparkles,
   Users,
   AlertTriangle,
@@ -40,7 +41,12 @@ import { useAuth } from '@/auth/AuthProvider';
 import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTransactions } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
-import { deleteTransactionLocal, dismissDuplicateLocal, payTransactionLocal } from '@/sync/mutations';
+import {
+  deleteTransactionLocal,
+  dismissDuplicateLocal,
+  payTransactionLocal,
+  unpayTransactionLocal,
+} from '@/sync/mutations';
 import { workspaceApi } from '@/api/endpoints';
 import { detectDuplicates, redundantDuplicates } from '@/lib/duplicates';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
@@ -158,6 +164,12 @@ export function TransactionsPage() {
     await payTransactionLocal(t.key);
     void syncNow();
     toast.success('Lançamento efetivado');
+  };
+
+  const unpay = async (t: LocalTransaction) => {
+    await unpayTransactionLocal(t.key);
+    void syncNow();
+    toast.success('Efetivação removida');
   };
 
   const confirmRemoveDuplicates = async () => {
@@ -409,6 +421,12 @@ export function TransactionsPage() {
                           <DropdownMenuItem onClick={() => void pay(t)}>
                             <Check className="h-4 w-4" />
                             Efetivar
+                          </DropdownMenuItem>
+                        )}
+                        {t.status === 'COMPLETED' && (
+                          <DropdownMenuItem onClick={() => void unpay(t)}>
+                            <Undo2 className="h-4 w-4" />
+                            Remover efetivação
                           </DropdownMenuItem>
                         )}
                         {!transfer && (
