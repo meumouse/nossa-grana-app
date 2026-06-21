@@ -5,6 +5,8 @@ import {
   ArrowDownRight,
   Wallet,
   TrendingUp,
+  Users,
+  Check,
 } from 'lucide-react';
 import {
   Area,
@@ -27,6 +29,9 @@ import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTransactions, 
 import { useAuth } from '@/auth/AuthProvider';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
+import { useSync } from '@/sync/SyncProvider';
+import { toggleSharePaidLocal } from '@/sync/mutations';
+import { toast } from '@/components/ui/sonner';
 import { formatDate, formatMoney, formatMoneyCents, fromCents, toCents } from '@/lib/format';
 
 const CHART_FALLBACK = [
@@ -105,6 +110,7 @@ export function DashboardPage() {
   const balances = useBalances(activeId);
   const txs = useLiveTransactions(activeId) ?? [];
   const { hidden } = usePrivacy();
+  const { syncNow } = useSync();
   const [opened, setOpened] = useState(false);
 
   const now = new Date();
@@ -198,6 +204,31 @@ export function DashboardPage() {
   const netCents = stats.incomeCents - stats.expenseCents;
   const expenseShare = stats.incomeCents > 0 ? Math.round((stats.expenseCents / stats.incomeCents) * 100) : 0;
 
+  // Despesas compartilhadas em que a MINHA parte (vinculada ao meu usuário) ainda
+  // não foi paga — o painel "Despesas que você deve pagar".
+  const myShares = useMemo(() => {
+    if (!user) return { rows: [] as { key: string; description: string; date: string; cents: number; index: number }[], totalCents: 0 };
+    const rows: { key: string; description: string; date: string; cents: number; index: number }[] = [];
+    let totalCents = 0;
+    for (const t of txs) {
+      if (t.deletedAt || !t.shared || !t.shares || t.type !== 'EXPENSE') continue;
+      const index = t.shares.findIndex((s) => s.userId === user.id && !s.owner && !s.paid);
+      if (index < 0) continue;
+      const count = t.shareCount ?? t.shares.length;
+      const cents = Math.round(toCents(t.amount) / (count > 0 ? count : 1));
+      rows.push({ key: t.key, description: t.description, date: t.date, cents, index });
+      totalCents += cents;
+    }
+    rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return { rows, totalCents };
+  }, [txs, user]);
+
+  const markSharePaid = async (key: string, index: number) => {
+    await toggleSharePaidLocal(key, index);
+    void syncNow();
+    toast.success('Parte marcada como paga');
+  };
+
   const recent = txs.slice(0, 6);
   const accMap = useMemo(
     () =>
@@ -266,6 +297,46 @@ export function DashboardPage() {
           }}
         />
       </div>
+
+      {/* Despesas compartilhadas que eu devo pagar (minha parte ainda pendente) */}
+      {myShares.rows.length > 0 && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4 text-warning" />
+              Despesas que você deve pagar
+            </CardTitle>
+            <Badge variant="warning">{formatMoneyCents(myShares.totalCents, hidden)}</Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y divide-border">
+              {myShares.rows.map((r) => (
+                <div key={r.key} className="flex items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{r.description}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(r.date)} · sua parte
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="whitespace-nowrap font-bold text-destructive">
+                      {formatMoneyCents(r.cents, hidden)}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void markSharePaid(r.key, r.index)}
+                    >
+                      <Check className="h-4 w-4" />
+                      Paguei
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Gráfico + donut */}
       <div className="grid gap-4 lg:grid-cols-3">

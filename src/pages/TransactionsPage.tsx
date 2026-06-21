@@ -50,7 +50,7 @@ import {
   payTransactionLocal,
   unpayTransactionLocal,
 } from '@/sync/mutations';
-import { workspaceApi } from '@/api/endpoints';
+import { memberApi, workspaceApi } from '@/api/endpoints';
 import { detectDuplicates, redundantDuplicates } from '@/lib/duplicates';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
 import { ImportAiModal } from '@/components/ImportAiModal';
@@ -121,6 +121,31 @@ export function TransactionsPage() {
   }, [activeId]);
 
   const ownerName = user?.name?.trim() || 'Você';
+
+  // Membros reais do workspace (exceto eu) p/ vincular a parte do rateio a um
+  // usuário com login — a despesa cai no painel "a pagar" dele enquanto pendente.
+  const [members, setMembers] = useState<{ userId: string; name: string }[]>([]);
+  useEffect(() => {
+    if (!activeId) return;
+    let live = true;
+    memberApi
+      .list(activeId)
+      .then((r) => {
+        if (!live) return;
+        setMembers(
+          r.members
+            .filter((m) => m.user.id !== user?.id)
+            .map((m) => ({
+              userId: m.user.id,
+              name: m.displayName || m.user.name || m.user.email,
+            })),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [activeId, user?.id]);
 
   // Nome por origem: contas + cartões (compras de cartão mostram o nome do cartão).
   const accMap = useMemo(
@@ -689,6 +714,7 @@ export function TransactionsPage() {
               initialShares={shareTarget.initial}
               amount={shareTarget.amount}
               contacts={contacts}
+              members={members}
               ownerName={ownerName}
               onContactsAdded={(names) => setContacts((prev) => Array.from(new Set([...prev, ...names])))}
               onSaved={exitSelect}

@@ -11,6 +11,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { formatMoney } from '@/lib/format';
@@ -31,6 +38,11 @@ interface Props {
   amount?: number | null;
   /** Pessoas já cadastradas (settings) p/ autocomplete. */
   contacts: string[];
+  /**
+   * Membros reais do workspace (exceto o próprio dono) p/ vincular a parte a um
+   * usuário com login — assim a despesa cai no painel dele enquanto não paga.
+   */
+  members?: { userId: string; name: string }[];
   /** Nome do dono do perfil (entra como pago por padrão). */
   ownerName: string;
   /** Avisa o pai sobre novos nomes cadastrados p/ atualizar o cache local. */
@@ -50,6 +62,7 @@ export function ShareTransactionModal({
   initialShares,
   amount,
   contacts,
+  members = [],
   ownerName,
   onContactsAdded,
   onSaved,
@@ -91,6 +104,21 @@ export function ShareTransactionModal({
     setNewName('');
   };
 
+  // Adiciona um membro real do workspace (vincula a parte ao User.id dele).
+  const addMember = (userId: string) => {
+    const member = members.find((m) => m.userId === userId);
+    if (!member) return;
+    if (shares.some((s) => s.userId === userId)) {
+      toast.error('Esse membro já está no rateio');
+      return;
+    }
+    setShares((prev) => {
+      const next = [...prev, { name: member.name, paid: false, userId }];
+      setCount((c) => Math.max(c, next.length));
+      return next;
+    });
+  };
+
   const removePerson = (i: number) =>
     setShares((prev) => {
       const next = prev.filter((_, idx) => idx !== i);
@@ -107,6 +135,11 @@ export function ShareTransactionModal({
   const suggestions = useMemo(
     () => contacts.filter((c) => !shares.some((s) => s.name.toLowerCase() === c.toLowerCase())),
     [contacts, shares],
+  );
+
+  const availableMembers = useMemo(
+    () => members.filter((m) => !shares.some((s) => s.userId === m.userId)),
+    [members, shares],
   );
 
   const save = async () => {
@@ -183,6 +216,11 @@ export function ShareTransactionModal({
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-sm font-medium">{s.name}</span>
                   {s.owner && <span className="text-xs text-muted-foreground">(você)</span>}
+                  {!s.owner && s.userId && (
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                      membro
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
@@ -206,8 +244,29 @@ export function ShareTransactionModal({
             ))}
           </div>
 
+          {availableMembers.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Adicionar membro do perfil</Label>
+              <Select value="" onValueChange={addMember}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolher um membro…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMembers.map((m) => (
+                    <SelectItem key={m.userId} value={m.userId}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                A parte do membro aparece no painel dele até ser marcada como paga.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-1.5">
-            <Label htmlFor="new-person">Adicionar pessoa</Label>
+            <Label htmlFor="new-person">Adicionar outra pessoa</Label>
             <div className="flex gap-2">
               <Input
                 id="new-person"

@@ -215,6 +215,11 @@ export interface TxShare {
   paid: boolean;
   /** true = o dono do perfil (entra como pago por padrão). */
   owner?: boolean;
+  /**
+   * Vínculo opcional a um membro real do workspace (User.id). Quando presente e
+   * a parte está `paid: false`, a despesa aparece no painel desse membro.
+   */
+  userId?: string | null;
 }
 
 export interface Transaction {
