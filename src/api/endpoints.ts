@@ -171,14 +171,24 @@ export interface ImportItemPatch {
   type?: 'INCOME' | 'EXPENSE';
   categoryId?: string | null;
   accountId?: string | null;
+  creditCardId?: string | null;
   status?: 'PENDING' | 'ACCEPTED' | 'REJECTED';
 }
 
+/** Dono padrão do lote: conta OU cartão (no máximo um preenchido). */
+export interface ImportOwner {
+  accountId?: string;
+  creditCardId?: string;
+}
+
 export const importApi = {
-  upload: (ws: string, file: File, accountId?: string) => {
+  upload: (ws: string, file: File, owner: ImportOwner = {}) => {
     const form = new FormData();
     form.append('file', file);
-    const qs = accountId ? `?accountId=${encodeURIComponent(accountId)}` : '';
+    const q = new URLSearchParams();
+    if (owner.accountId) q.set('accountId', owner.accountId);
+    if (owner.creditCardId) q.set('creditCardId', owner.creditCardId);
+    const qs = q.toString() ? `?${q}` : '';
     return api.postForm<{ batch: ImportBatch }>(wsPath(ws, `/imports${qs}`), form);
   },
   list: (ws: string) => api.get<{ items: ImportBatch[] }>(wsPath(ws, '/imports')),
@@ -188,10 +198,10 @@ export const importApi = {
   // Quando há fila (Redis), a API responde 202 com queued:true e o processamento
   // segue em background — acompanhe via `get` (polling) até CONFIRMED/FAILED.
   // Sem fila, vem queued:false com `imported` já preenchido.
-  confirm: (ws: string, id: string, defaultAccountId?: string) =>
+  confirm: (ws: string, id: string, owner: ImportOwner = {}) =>
     api.post<{ batch: ImportBatch; imported?: number; queued: boolean }>(
       wsPath(ws, `/imports/${id}/confirm`),
-      { defaultAccountId },
+      { defaultAccountId: owner.accountId, defaultCreditCardId: owner.creditCardId },
     ),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/imports/${id}`)),
 };

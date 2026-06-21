@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/sonner';
-import { useLiveAccounts, useLiveCategories } from '@/hooks/useLiveData';
+import { useLiveAccounts, useLiveCards, useLiveCategories } from '@/hooks/useLiveData';
 import { useSync } from '@/sync/SyncProvider';
 import { importApi } from '@/api/endpoints';
 import { ApiError } from '@/api/client';
@@ -46,7 +46,19 @@ interface Row {
   amount: string; // input cru
   type: 'INCOME' | 'EXPENSE';
   categoryId: string;
-  accountId: string;
+  // Origem do lançamento: conta ou cartão, codificada em "acc:<id>" / "card:<id>".
+  source: string;
+}
+
+// O seletor de origem codifica conta vs cartão (mesma convenção do form de transação).
+const accVal = (id: string) => `acc:${id}`;
+const cardVal = (id: string) => `card:${id}`;
+
+/** Decodifica "acc:<id>" / "card:<id>" no par {accountId, creditCardId} (um deles). */
+function decodeSource(source: string): { accountId?: string; creditCardId?: string } {
+  if (!source) return {};
+  const id = source.slice(source.indexOf(':') + 1);
+  return source.startsWith('card:') ? { creditCardId: id } : { accountId: id };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -71,7 +83,7 @@ async function waitForImport(workspaceId: string, batchId: string): Promise<numb
   throw new Error('A importação ainda está em andamento. Confira o extrato em instantes.');
 }
 
-function itemToRow(it: ImportItem, fallbackAccount: string): Row {
+function itemToRow(it: ImportItem, fallbackSource: string): Row {
   return {
     id: it.id,
     accept: true,
@@ -80,18 +92,24 @@ function itemToRow(it: ImportItem, fallbackAccount: string): Row {
     amount: String(it.amount),
     type: it.type,
     categoryId: it.categoryId ?? '',
-    accountId: it.accountId ?? fallbackAccount,
+    source: it.creditCardId
+      ? cardVal(it.creditCardId)
+      : it.accountId
+        ? accVal(it.accountId)
+        : fallbackSource,
   };
 }
 
 export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
   const { syncNow } = useSync();
   const accounts = useLiveAccounts(workspaceId) ?? [];
+  const cards = useLiveCards(workspaceId) ?? [];
   const categories = useLiveCategories(workspaceId) ?? [];
 
   const fileInput = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>('idle');
-  const [accountId, setAccountId] = useState('');
+  // Origem de destino do lote ("acc:<id>" | "card:<id>").
+  const [source, setSource] = useState('');
   const [batch, setBatch] = useState<ImportBatch | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [confirming, setConfirming] = useState(false);
@@ -112,15 +130,15 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
   };
 
   const onFile = async (file: File) => {
-    if (!accountId) {
-      toast.error('Escolha a conta de destino antes de enviar o documento.');
+    if (!source) {
+      toast.error('Escolha a conta ou o cartão de destino antes de enviar o documento.');
       return;
     }
     setPhase('processing');
     try {
-      const { batch: b } = await importApi.upload(workspaceId, file, accountId);
+      const { batch: b } = await importApi.upload(workspaceId, file, decodeSource(source));
       setBatch(b);
-      setRows((b.items ?? []).map((it) => itemToRow(it, accountId)));
+      setRows((b.items ?? []).map((it) => itemToRow(it, source)));
       setPhase(b.items && b.items.length > 0 ? 'review' : 'idle');
       if (!b.items || b.items.length === 0) {
         toast.error('Nenhuma transação foi reconhecida no documento.');
@@ -143,17 +161,19 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
     try {
       // Persiste os valores revisados (só dos itens aceitos) antes de confirmar.
       for (const r of accepted) {
+        const owner = decodeSource(r.source);
         await importApi.patchItem(workspaceId, batch.id, r.id, {
           date: r.date.toISOString(),
           description: r.description.trim(),
           amount: Number(r.amount.replace(',', '.')),
           type: r.type,
           categoryId: r.categoryId || null,
-          accountId: r.accountId || null,
+          accountId: owner.accountId ?? null,
+          creditCardId: owner.creditCardId ?? null,
           status: 'ACCEPTED',
         });
       }
-      const res = await importApi.confirm(workspaceId, batch.id, accountId || undefined);
+      const res = await importApi.confirm(workspaceId, batch.id, decodeSource(source));
       // Com fila, a API só enfileira (202): acompanha o processamento em
       // background por polling até concluir. Sem fila, já vem o total importado.
       const imported = res.queued
@@ -195,15 +215,20 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
         {phase !== 'review' && (
           <Card className="space-y-4 p-4">
             <div className="space-y-1.5">
-              <Label>Conta de destino</Label>
-              <Select value={accountId} onValueChange={setAccountId}>
+              <Label>Conta ou cartão de destino</Label>
+              <Select value={source} onValueChange={setSource}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione a conta" />
+                  <SelectValue placeholder="Selecione a conta ou o cartão" />
                 </SelectTrigger>
                 <SelectContent>
                   {accounts.map((a) => (
-                    <SelectItem key={a.key} value={a.key}>
+                    <SelectItem key={`acc-${a.key}`} value={accVal(a.key)}>
                       {a.name}
+                    </SelectItem>
+                  ))}
+                  {cards.map((c) => (
+                    <SelectItem key={`card-${c.key}`} value={cardVal(c.key)}>
+                      {c.name} (cartão)
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -322,18 +347,23 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
                       </div>
 
                       <div className="space-y-1">
-                        <Label className="text-xs">Conta</Label>
+                        <Label className="text-xs">Conta ou cartão</Label>
                         <Select
-                          value={r.accountId}
-                          onValueChange={(v) => patchRow(r.id, { accountId: v })}
+                          value={r.source}
+                          onValueChange={(v) => patchRow(r.id, { source: v })}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Conta" />
+                            <SelectValue placeholder="Conta ou cartão" />
                           </SelectTrigger>
                           <SelectContent>
                             {accounts.map((a) => (
-                              <SelectItem key={a.key} value={a.key}>
+                              <SelectItem key={`acc-${a.key}`} value={accVal(a.key)}>
                                 {a.name}
+                              </SelectItem>
+                            ))}
+                            {cards.map((c) => (
+                              <SelectItem key={`card-${c.key}`} value={cardVal(c.key)}>
+                                {c.name} (cartão)
                               </SelectItem>
                             ))}
                           </SelectContent>
