@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Landmark, Loader2, Receipt, Wallet } from 'lucide-react';
+import { CheckSquare, Landmark, Loader2, Receipt, Trash2, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -14,7 +14,11 @@ import { usePrivacy } from '@/ui/PrivacyProvider';
 import { analyticsApi, invoiceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
 import { LoadMore } from '@/components/LoadMore';
+import { SelectionBar } from '@/components/SelectionBar';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { usePagedList } from '@/hooks/usePagedList';
+import { useSelection } from '@/hooks/useSelection';
+import { cn } from '@/lib/utils';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { CreditCardInvoice, InvoiceStatus } from '@/api/types';
 
@@ -61,6 +65,9 @@ export function InvoicesPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payAccountId, setPayAccountId] = useState('');
+  const sel = useSelection();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['invoices', activeId],
@@ -91,10 +98,37 @@ export function InvoicesPage() {
 
   const invoices = data?.invoices ?? [];
   const paged = usePagedList(invoices, { resetKey: activeId });
+  const allSelected = paged.visible.length > 0 && paged.visible.every((inv) => sel.has(inv.id));
+
+  const bulkDelete = async () => {
+    setDeleting(true);
+    try {
+      await Promise.all([...sel.selected].map((id) => invoiceApi.remove(activeId!, id)));
+      toast.success(sel.count === 1 ? 'Fatura excluída' : `${sel.count} faturas excluídas`);
+      setConfirmOpen(false);
+      sel.exit();
+      invalidate();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">Faturas de cartão</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-bold">Faturas de cartão</h1>
+        {invoices.length > 0 && (
+          <Button
+            variant={sel.active ? 'secondary' : 'outline'}
+            onClick={() => (sel.active ? sel.exit() : sel.enter())}
+          >
+            <CheckSquare className="h-4 w-4" />
+            {sel.active ? 'Cancelar' : 'Selecionar'}
+          </Button>
+        )}
+      </div>
 
       {isLoading ? (
         <div className="flex justify-center py-16">
@@ -109,16 +143,29 @@ export function InvoicesPage() {
           Nenhuma fatura. Elas são geradas a partir das compras no cartão.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className={cn('space-y-2', sel.active && 'pb-20')}>
           {paged.visible.map((inv) => {
             const projected = isProjected(inv);
             const st = projected ? PROJECTED : STATUS[inv.status];
             return (
               <Card
                 key={inv.id}
-                className="flex cursor-pointer items-center justify-between gap-2 p-3 hover:bg-accent/40"
-                onClick={() => setDetailId(inv.id)}
+                className={cn(
+                  'flex cursor-pointer items-center justify-between gap-2 p-3 hover:bg-accent/40',
+                  sel.has(inv.id) && 'ring-2 ring-primary',
+                )}
+                onClick={() => (sel.active ? sel.toggle(inv.id) : setDetailId(inv.id))}
               >
+                {sel.active && (
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-primary"
+                    checked={sel.has(inv.id)}
+                    onChange={() => sel.toggle(inv.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Selecionar fatura ${cardName.get(inv.creditCardId) ?? ''}`}
+                  />
+                )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <Receipt className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -131,7 +178,7 @@ export function InvoicesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="whitespace-nowrap font-bold">{formatMoney(inv.total, hidden)}</span>
-                  {inv.status !== 'PAID' && Number(inv.total) > 0 && !projected && (
+                  {!sel.active && inv.status !== 'PAID' && Number(inv.total) > 0 && !projected && (
                     <Button
                       size="sm"
                       variant="secondary"
@@ -181,6 +228,33 @@ export function InvoicesPage() {
           ))}
         </div>
       )}
+
+      {sel.active && (
+        <SelectionBar
+          count={sel.count}
+          allSelected={allSelected}
+          onToggleAll={() => (allSelected ? sel.clear() : sel.setMany(paged.visible.map((inv) => inv.id)))}
+          onCancel={sel.exit}
+        >
+          <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={sel.count === 0}>
+            <Trash2 className="h-4 w-4" />
+            Excluir
+          </Button>
+        </SelectionBar>
+      )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Excluir faturas"
+        description={
+          sel.count === 1
+            ? 'A fatura selecionada será excluída. Os lançamentos do cartão são preservados (apenas desvinculados da fatura). Esta ação não pode ser desfeita.'
+            : `${sel.count} faturas selecionadas serão excluídas. Os lançamentos do cartão são preservados (apenas desvinculados das faturas). Esta ação não pode ser desfeita.`
+        }
+        loading={deleting}
+        onConfirm={() => void bulkDelete()}
+      />
 
       {/* Pagar fatura */}
       <Dialog open={!!payingId} onOpenChange={(o) => !o && setPayingId(null)}>

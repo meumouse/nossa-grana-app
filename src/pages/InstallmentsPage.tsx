@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Calendar as CalendarIcon, Check, CreditCard, Loader2, Pencil, Plus, Search, Trash2, Undo2, Users, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Check, CheckSquare, CreditCard, Loader2, Pencil, Plus, Search, Trash2, Undo2, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -23,7 +23,11 @@ import { payTransactionLocal, unpayTransactionLocal } from '@/sync/mutations';
 import { installmentApi, transactionApi, workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
 import { LoadMore } from '@/components/LoadMore';
+import { SelectionBar } from '@/components/SelectionBar';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { usePagedList } from '@/hooks/usePagedList';
+import { useSelection } from '@/hooks/useSelection';
+import { cn } from '@/lib/utils';
 import { formatDate, formatMoney } from '@/lib/format';
 import { fireConfetti } from '@/lib/confetti';
 import type { InstallmentPlan, Transaction, TxShare } from '@/api/types';
@@ -66,6 +70,9 @@ export function InstallmentsPage() {
   // O recálculo segue o modelo de prefixo, então avisamos o usuário.
   const [paidGap, setPaidGap] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const sel = useSelection();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [accountFilter, setAccountFilter] = useState('ALL');
@@ -302,6 +309,24 @@ export function InstallmentsPage() {
   const paged = usePagedList(items, {
     resetKey: `${search}|${categoryFilter}|${accountFilter}|${cardFilter}`,
   });
+  const allSelected = paged.visible.length > 0 && paged.visible.every((p) => sel.has(p.id));
+
+  const bulkDelete = async () => {
+    setDeleting(true);
+    try {
+      await Promise.all([...sel.selected].map((id) => installmentApi.remove(activeId!, id)));
+      toast.success(
+        sel.count === 1 ? 'Parcelamento excluído' : `${sel.count} parcelamentos excluídos`,
+      );
+      setConfirmOpen(false);
+      sel.exit();
+      invalidate();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const clearFilters = () => {
     setSearch('');
@@ -312,12 +337,23 @@ export function InstallmentsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Parcelamentos</h1>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4" />
-          Novo parcelamento
-        </Button>
+        <div className="flex items-center gap-2">
+          {allItems.length > 0 && (
+            <Button
+              variant={sel.active ? 'secondary' : 'outline'}
+              onClick={() => (sel.active ? sel.exit() : sel.enter())}
+            >
+              <CheckSquare className="h-4 w-4" />
+              {sel.active ? 'Cancelar' : 'Selecionar'}
+            </Button>
+          )}
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4" />
+            Novo parcelamento
+          </Button>
+        </div>
       </div>
 
       {!isLoading && !isError && allItems.length > 0 && (
@@ -400,13 +436,26 @@ export function InstallmentsPage() {
           Nenhum parcelamento corresponde aos filtros.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className={cn('space-y-2', sel.active && 'pb-20')}>
           {paged.visible.map((p) => (
             <Card
               key={p.id}
-              className="flex cursor-pointer items-center justify-between gap-2 p-3 hover:bg-accent/40"
-              onClick={() => setDetailId(p.id)}
+              className={cn(
+                'flex cursor-pointer items-center justify-between gap-2 p-3 hover:bg-accent/40',
+                sel.has(p.id) && 'ring-2 ring-primary',
+              )}
+              onClick={() => (sel.active ? sel.toggle(p.id) : setDetailId(p.id))}
             >
+              {sel.active && (
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0 accent-primary"
+                  checked={sel.has(p.id)}
+                  onChange={() => sel.toggle(p.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Selecionar ${p.description}`}
+                />
+              )}
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -418,29 +467,33 @@ export function InstallmentsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="whitespace-nowrap font-bold">{formatMoney(p.totalAmount, hidden)}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Editar"
-                  disabled={loadingEdit}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void openEdit(p.id);
-                  }}
-                >
-                  <Pencil className="h-4 w-4 text-muted-foreground" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Excluir"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    remove.mutate(p.id);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                {!sel.active && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Editar"
+                      disabled={loadingEdit}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void openEdit(p.id);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Excluir"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        remove.mutate(p.id);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </>
+                )}
               </div>
             </Card>
           ))}
@@ -452,6 +505,33 @@ export function InstallmentsPage() {
           />
         </div>
       )}
+
+      {sel.active && (
+        <SelectionBar
+          count={sel.count}
+          allSelected={allSelected}
+          onToggleAll={() => (allSelected ? sel.clear() : sel.setMany(paged.visible.map((p) => p.id)))}
+          onCancel={sel.exit}
+        >
+          <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={sel.count === 0}>
+            <Trash2 className="h-4 w-4" />
+            Excluir
+          </Button>
+        </SelectionBar>
+      )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Excluir parcelamentos"
+        description={
+          sel.count === 1
+            ? 'O parcelamento selecionado será excluído e as parcelas futuras pendentes serão removidas. Esta ação não pode ser desfeita.'
+            : `${sel.count} parcelamentos selecionados serão excluídos e as parcelas futuras pendentes serão removidas. Esta ação não pode ser desfeita.`
+        }
+        loading={deleting}
+        onConfirm={() => void bulkDelete()}
+      />
 
       <Dialog
         open={opened}

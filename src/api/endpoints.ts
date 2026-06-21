@@ -308,6 +308,7 @@ export const invoiceApi = {
     api.get<{ invoice: CreditCardInvoice }>(wsPath(ws, `/invoices/${id}`)),
   pay: (ws: string, id: string, body: { paymentAccountId?: string; paidAt?: string } = {}) =>
     api.post<{ invoice: CreditCardInvoice }>(wsPath(ws, `/invoices/${id}/pay`), body),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/invoices/${id}`)),
 };
 
 // ---- Investimentos (online) ----
@@ -340,6 +341,8 @@ export const investmentApi = {
     api.post<{ asset: InvestmentAsset }>(wsPath(ws, '/investments/assets'), body),
   updateAsset: (ws: string, id: string, body: Partial<AssetInput>) =>
     api.patch<{ asset: InvestmentAsset }>(wsPath(ws, `/investments/assets/${id}`), body),
+  removeAsset: (ws: string, id: string) =>
+    api.del<void>(wsPath(ws, `/investments/assets/${id}`)),
   createTx: (ws: string, body: InvestmentTxInput) =>
     api.post<{ transaction: InvestmentTransaction }>(wsPath(ws, '/investments/transactions'), body),
   removeTx: (ws: string, id: string) =>

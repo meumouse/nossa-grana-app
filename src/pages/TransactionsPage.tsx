@@ -59,6 +59,8 @@ import { ConsistencyCheckModal } from '@/components/ConsistencyCheckModal';
 import { RecurringFormModal, type RecurringInitial } from '@/components/RecurringFormModal';
 import { SuggestedRecurringSection } from '@/components/SuggestedRecurringSection';
 import { LoadMore } from '@/components/LoadMore';
+import { SelectionBar } from '@/components/SelectionBar';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { usePagedList } from '@/hooks/usePagedList';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { LocalTransaction } from '@/db/dexie';
@@ -101,6 +103,8 @@ export function TransactionsPage() {
   // Seleção em massa (p/ marcar transações compartilhadas de uma vez).
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Pessoas cadastradas (settings) p/ autocomplete no rateio.
   const [contacts, setContacts] = useState<string[]>([]);
@@ -264,6 +268,29 @@ export function TransactionsPage() {
   const openBulkShare = () => {
     if (selected.size === 0) return toast.error('Selecione ao menos uma transação');
     setShareTarget({ keys: [...selected], initial: null, amount: null });
+  };
+
+  // "Selecionar tudo" marca apenas os lançamentos visíveis (já revelados pela
+  // paginação), conforme a regra acordada.
+  const allSelected = paged.visible.length > 0 && paged.visible.every((t) => selected.has(t.key));
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(paged.visible.map((t) => t.key)));
+
+  const bulkDelete = async () => {
+    setBulkDeleting(true);
+    try {
+      for (const key of selected) await deleteTransactionLocal(key);
+      void syncNow();
+      toast.success(
+        selected.size === 1 ? 'Lançamento excluído' : `${selected.size} lançamentos excluídos`,
+      );
+      setBulkDeleteOpen(false);
+      exitSelect();
+    } catch {
+      toast.error('Não foi possível excluir os lançamentos');
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   return (
@@ -538,22 +565,39 @@ export function TransactionsPage() {
 
       {/* Barra de ação da seleção em massa */}
       {selectMode && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <div className="mx-auto flex max-w-2xl items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">{selected.size} selecionada(s)</span>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" onClick={exitSelect}>
-                <X className="h-4 w-4" />
-                Cancelar
-              </Button>
-              <Button onClick={openBulkShare} disabled={selected.size === 0}>
-                <Users className="h-4 w-4" />
-                Compartilhar
-              </Button>
-            </div>
-          </div>
-        </div>
+        <SelectionBar
+          count={selected.size}
+          allSelected={allSelected}
+          onToggleAll={toggleAll}
+          onCancel={exitSelect}
+        >
+          <Button variant="secondary" onClick={openBulkShare} disabled={selected.size === 0}>
+            <Users className="h-4 w-4" />
+            Compartilhar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => setBulkDeleteOpen(true)}
+            disabled={selected.size === 0}
+          >
+            <Trash2 className="h-4 w-4" />
+            Excluir
+          </Button>
+        </SelectionBar>
       )}
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title="Excluir lançamentos"
+        description={
+          selected.size === 1
+            ? 'O lançamento selecionado será excluído. Esta ação não pode ser desfeita.'
+            : `${selected.size} lançamentos selecionados serão excluídos. Esta ação não pode ser desfeita.`
+        }
+        loading={bulkDeleting}
+        onConfirm={() => void bulkDelete()}
+      />
 
       <Dialog open={removeDupesOpen} onOpenChange={(o) => !removingDupes && setRemoveDupesOpen(o)}>
         <DialogContent>

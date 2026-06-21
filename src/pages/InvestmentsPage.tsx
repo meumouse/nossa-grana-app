@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Plus, TrendingUp, Trash2 } from 'lucide-react';
+import { CheckSquare, Loader2, Plus, TrendingUp, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -17,7 +17,10 @@ import { usePrivacy } from '@/ui/PrivacyProvider';
 import { investmentApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
 import { LoadMore } from '@/components/LoadMore';
+import { SelectionBar } from '@/components/SelectionBar';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { usePagedList } from '@/hooks/usePagedList';
+import { useSelection } from '@/hooks/useSelection';
 import { cn } from '@/lib/utils';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { InvestmentAsset, InvestmentClass, InvestmentTxKind } from '@/api/types';
@@ -67,6 +70,9 @@ export function InvestmentsPage() {
   const [assetOpen, setAssetOpen] = useState(false);
   const [txOpen, setTxOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const sel = useSelection();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // form: ativo
   const [name, setName] = useState('');
@@ -129,6 +135,22 @@ export function InvestmentsPage() {
 
   const assets = data?.assets ?? [];
   const paged = usePagedList(assets, { resetKey: activeId });
+  const allSelected = paged.visible.length > 0 && paged.visible.every((a) => sel.has(a.id));
+
+  const bulkDelete = async () => {
+    setDeleting(true);
+    try {
+      await Promise.all([...sel.selected].map((id) => investmentApi.removeAsset(activeId!, id)));
+      toast.success(sel.count === 1 ? 'Ativo excluído' : `${sel.count} ativos excluídos`);
+      setConfirmOpen(false);
+      sel.exit();
+      invalidate();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const openAsset = () => {
     setName('');
@@ -154,7 +176,16 @@ export function InvestmentsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Investimentos</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {assets.length > 0 && (
+            <Button
+              variant={sel.active ? 'secondary' : 'outline'}
+              onClick={() => (sel.active ? sel.exit() : sel.enter())}
+            >
+              <CheckSquare className="h-4 w-4" />
+              {sel.active ? 'Cancelar' : 'Selecionar'}
+            </Button>
+          )}
           <Button variant="outline" onClick={openAsset}>
             <Plus className="h-4 w-4" />
             Ativo
@@ -186,16 +217,29 @@ export function InvestmentsPage() {
           Nenhum ativo. Cadastre uma ação, FII, fundo ou cripto.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className={cn('space-y-2', sel.active && 'pb-20')}>
           {paged.visible.map((a) => {
             const pl = profit(a);
             const qty = Number(a.position?.quantity ?? 0);
             return (
               <Card
                 key={a.id}
-                className="flex cursor-pointer items-center justify-between gap-2 p-3 hover:bg-accent/40"
-                onClick={() => setDetailId(a.id)}
+                className={cn(
+                  'flex cursor-pointer items-center justify-between gap-2 p-3 hover:bg-accent/40',
+                  sel.has(a.id) && 'ring-2 ring-primary',
+                )}
+                onClick={() => (sel.active ? sel.toggle(a.id) : setDetailId(a.id))}
               >
+                {sel.active && (
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-primary"
+                    checked={sel.has(a.id)}
+                    onChange={() => sel.toggle(a.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Selecionar ${a.name}`}
+                  />
+                )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -231,6 +275,33 @@ export function InvestmentsPage() {
           />
         </div>
       )}
+
+      {sel.active && (
+        <SelectionBar
+          count={sel.count}
+          allSelected={allSelected}
+          onToggleAll={() => (allSelected ? sel.clear() : sel.setMany(paged.visible.map((a) => a.id)))}
+          onCancel={sel.exit}
+        >
+          <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={sel.count === 0}>
+            <Trash2 className="h-4 w-4" />
+            Excluir
+          </Button>
+        </SelectionBar>
+      )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Excluir ativos"
+        description={
+          sel.count === 1
+            ? 'O ativo selecionado e todos os seus movimentos serão excluídos. Esta ação não pode ser desfeita.'
+            : `${sel.count} ativos selecionados e todos os seus movimentos serão excluídos. Esta ação não pode ser desfeita.`
+        }
+        loading={deleting}
+        onConfirm={() => void bulkDelete()}
+      />
 
       {/* Novo ativo */}
       <Dialog open={assetOpen} onOpenChange={(o) => !o && setAssetOpen(false)}>
