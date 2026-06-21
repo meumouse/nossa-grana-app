@@ -5,6 +5,7 @@ import { WorkspaceProvider } from './workspace/WorkspaceProvider';
 import { SyncProvider } from './sync/SyncProvider';
 import { PrivacyProvider } from './ui/PrivacyProvider';
 import { ThemeProvider } from './ui/ThemeProvider';
+import { Toaster } from './components/ui/sonner';
 import { AppLayout } from './components/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -24,6 +25,8 @@ import { InvestmentsPage } from './pages/InvestmentsPage';
 import { ForecastPage } from './pages/ForecastPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { MembersPage } from './pages/MembersPage';
+import { InviteAcceptPage } from './pages/InviteAcceptPage';
 
 function FullLoader() {
   return (
@@ -57,6 +60,7 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/invite" element={<InviteAcceptPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -79,7 +83,9 @@ function AppRoutes() {
         <Route path="/investments" element={<InvestmentsPage />} />
         <Route path="/forecast" element={<ForecastPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/members" element={<MembersPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/invite" element={<InviteAcceptPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -96,6 +102,7 @@ export function App() {
           <AppRoutes />
         </BrowserRouter>
       </AuthProvider>
+      <Toaster position="top-right" richColors />
     </ThemeProvider>
   );
 }

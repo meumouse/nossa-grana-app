@@ -20,6 +20,41 @@ export type CategoryKind = 'INCOME' | 'EXPENSE';
 export type CategoryNature = 'FIXED' | 'VARIABLE' | 'LEISURE' | 'INVESTMENT' | 'INCOME' | 'OTHER';
 export type MemberRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 
+/** Membro do workspace (perfil compartilhado). */
+export interface Member {
+  id: string;
+  role: MemberRole;
+  displayName: string | null;
+  createdAt: string;
+  user: { id: string; name: string | null; email: string; avatarUrl: string | null };
+}
+
+/** Convite pendente listado para o ADMIN do workspace. */
+export interface Invitation {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  displayName: string | null;
+  role: MemberRole;
+  status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+  createdAt: string;
+  expiresAt: string;
+  /** Link de aceite p/ compartilhar (WhatsApp/copiar). */
+  acceptUrl: string;
+}
+
+/** Convite recebido pelo usuário logado (notificação no painel). */
+export interface MyInvitation {
+  id: string;
+  token: string;
+  role: MemberRole;
+  displayName: string | null;
+  createdAt: string;
+  expiresAt: string;
+  workspace: { id: string; name: string };
+  invitedBy: { name: string | null; surname: string | null };
+}
+
 export interface User {
   id: string;
   email: string;

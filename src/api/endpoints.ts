@@ -23,6 +23,10 @@ import type {
   InvestmentTransaction,
   InvestmentTxKind,
   InvoiceStatus,
+  Invitation,
+  Member,
+  MemberRole,
+  MyInvitation,
   ProfileUpdateInput,
   RecurrenceFrequency,
   RecurringTransaction,
@@ -330,6 +334,34 @@ export const investmentApi = {
     api.post<{ transaction: InvestmentTransaction }>(wsPath(ws, '/investments/transactions'), body),
   removeTx: (ws: string, id: string) =>
     api.del<void>(wsPath(ws, `/investments/transactions/${id}`)),
+};
+
+// ---- Membros & convites (online) ----
+export const memberApi = {
+  list: (ws: string) => api.get<{ members: Member[] }>(wsPath(ws, '/members')),
+  update: (ws: string, id: string, body: { role?: MemberRole; displayName?: string | null }) =>
+    api.patch<{ member: Member }>(wsPath(ws, `/members/${id}`), body),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/members/${id}`)),
+};
+
+export interface CreateInvitationInput {
+  email?: string;
+  phone?: string;
+  displayName?: string;
+  role?: MemberRole;
+}
+
+export const invitationApi = {
+  list: (ws: string) => api.get<{ invitations: Invitation[] }>(wsPath(ws, '/invitations')),
+  create: (ws: string, body: CreateInvitationInput) =>
+    api.post<{ invitation: Invitation }>(wsPath(ws, '/invitations'), body),
+  revoke: (ws: string, id: string) =>
+    api.post<void>(wsPath(ws, `/invitations/${id}/revoke`)),
+  // Rotas não escopadas (o usuário ainda não é membro).
+  mine: () => api.get<{ invitations: MyInvitation[] }>('/api/invitations/mine'),
+  accept: (token: string) =>
+    api.post<{ workspaceId: string }>('/api/invitations/accept', { token }),
+  decline: (token: string) => api.post<void>('/api/invitations/decline', { token }),
 };
 
 export const syncApi = {

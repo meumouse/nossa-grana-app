@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Wallet,
@@ -12,6 +12,7 @@ import {
   TrendingUp,
   LineChart,
   Settings,
+  Users,
   UserRound,
   Eye,
   EyeOff,
@@ -37,6 +38,8 @@ import { useSync } from '@/sync/SyncProvider';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useTheme } from '@/ui/ThemeProvider';
 import type { ThemeMode } from '@/ui/ThemeProvider';
+import { InvitationsNotice } from '@/components/InvitationsNotice';
+import { PENDING_INVITE_KEY } from '@/pages/InviteAcceptPage';
 
 // Ordem de ciclagem do botão de tema no header.
 const THEME_CYCLE: ThemeMode[] = ['light', 'dark', 'system'];
@@ -75,6 +78,7 @@ const LINKS = [
   { to: '/invoices', label: 'Faturas', icon: Receipt },
   { to: '/investments', label: 'Investimentos', icon: TrendingUp },
   { to: '/forecast', label: 'Previsão', icon: LineChart },
+  { to: '/members', label: 'Família', icon: Users },
   { to: '/profile', label: 'Perfil', icon: UserRound },
   { to: '/settings', label: 'Configurações', icon: Settings },
 ];
@@ -194,6 +198,22 @@ function SyncStatus() {
   );
 }
 
+/**
+ * Retoma um convite aberto deslogado: o token ficou em localStorage; assim que o
+ * usuário autentica, levamos ele à tela de aceite (uma vez).
+ */
+function PendingInviteRedirect() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  useEffect(() => {
+    const token = localStorage.getItem(PENDING_INVITE_KEY);
+    if (token && location.pathname !== '/invite') {
+      navigate(`/invite?token=${encodeURIComponent(token)}`, { replace: true });
+    }
+  }, [navigate, location.pathname]);
+  return null;
+}
+
 export function AppLayout() {
   const [open, setOpen] = useState(false);
   const { workspaces, activeId, setActive } = useWorkspace();
@@ -257,6 +277,8 @@ export function AppLayout() {
         </header>
 
         <main className="min-w-0 flex-1 p-4 md:p-6">
+          <PendingInviteRedirect />
+          <InvitationsNotice />
           <Outlet />
         </main>
       </div>
