@@ -5,6 +5,9 @@ services:
       dockerfile: Dockerfile
     container_name: nossa-grana-web
     restart: unless-stopped
+    environment:
+      # Local: o serviço da API se chama "api" no compose do repo nossa-grana-api.
+      - API_UPSTREAM=api:3333
     ports:
       - "8081:80"
     networks:

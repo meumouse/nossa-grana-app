@@ -10,6 +10,10 @@ COPY . .
 RUN npm run build
 
 FROM nginx:alpine AS runtime
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Host:porta da API, injetado no boot via envsubst (templates/*.template).
+# Default = host interno do EasyPanel (<projeto>_<serviço>); o compose local
+# sobrescreve com "api:3333".
+ENV API_UPSTREAM=n8n_nossa-grana-api:3333
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
