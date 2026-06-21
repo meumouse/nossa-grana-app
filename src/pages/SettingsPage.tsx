@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Sparkles, KeyRound, ShieldCheck, SlidersHorizontal, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,9 @@ const MODEL_SUGGESTIONS: Record<LlmProvider, string[]> = {
   google: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
 };
 const CURRENCIES = ['BRL', 'USD', 'EUR', 'GBP', 'ARS'];
+// Valor-sentinela do seletor de modelo p/ "usar o padrão do servidor" (o Radix
+// Select não aceita value vazio); ao salvar, vira string vazia.
+const DEFAULT_MODEL = '__default__';
 
 function handleError(err: unknown) {
   toast.error(
@@ -114,11 +117,25 @@ export function SettingsPage() {
     onError: handleError,
   });
 
-  // Trocar de provider invalida a lista buscada (era do provider anterior).
+  // Trocar de provider invalida a lista buscada e o modelo (eram do provider
+  // anterior); volta para "Padrão do servidor" até o usuário escolher outro.
   const onChangeProvider = (value: LlmProvider) => {
     setProvider(value);
     setModels([]);
+    setModel('');
   };
+
+  // Opções do seletor: a lista buscada via API, ou as sugestões do provider.
+  // Garante que o modelo salvo apareça mesmo se não estiver na lista buscada.
+  const modelOptions = useMemo<LlmModelInfo[]>(() => {
+    const base: LlmModelInfo[] = models.length
+      ? models
+      : MODEL_SUGGESTIONS[provider].map((id) => ({ id, label: null }));
+    if (model && !base.some((m) => m.id === model)) {
+      return [{ id: model, label: null }, ...base];
+    }
+    return base;
+  }, [models, provider, model]);
 
   const onSubmitAi = (e: React.FormEvent) => {
     e.preventDefault();
@@ -308,15 +325,23 @@ export function SettingsPage() {
             <div className="space-y-2">
               <Label htmlFor="model">Modelo de LLM</Label>
               <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  id="model"
-                  list="model-suggestions"
-                  placeholder={MODEL_SUGGESTIONS[provider][0]}
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
+                <Select
+                  value={model || DEFAULT_MODEL}
+                  onValueChange={(v) => setModel(v === DEFAULT_MODEL ? '' : v)}
                   disabled={!canEdit}
-                  className="w-full sm:w-64"
-                />
+                >
+                  <SelectTrigger id="model" className="w-full sm:w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_MODEL}>Padrão do servidor</SelectItem>
+                    {modelOptions.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.label ?? m.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {canEdit && (
                   <Button
                     type="button"
@@ -333,20 +358,10 @@ export function SettingsPage() {
                   </Button>
                 )}
               </div>
-              <datalist id="model-suggestions">
-                {(models.length
-                  ? models
-                  : MODEL_SUGGESTIONS[provider].map((id) => ({ id, label: null }))
-                ).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label ?? m.id}
-                  </option>
-                ))}
-              </datalist>
               <p className="text-xs text-muted-foreground">
                 {models.length
                   ? `${models.length} modelo(s) do provedor — escolha um com visão (lê PDF/imagem).`
-                  : 'Use um modelo com visão (lê PDF/imagem). Clique em “Buscar modelos” para listar os do provedor pela API. Em branco usa o padrão do servidor.'}
+                  : 'Escolha um modelo com visão (lê PDF/imagem) ou clique em “Buscar modelos” para listar os do provedor pela API. “Padrão do servidor” usa o configurado no servidor.'}
               </p>
             </div>
 
