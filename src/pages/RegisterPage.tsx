@@ -7,14 +7,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import { useAuth } from '@/auth/AuthProvider';
+import { GoogleSignInButton, googleSignInEnabled } from '@/auth/GoogleSignInButton';
 import { ApiError } from '@/api/client';
 
 export function RegisterPage() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const onGoogle = async (credential: string) => {
+    try {
+      await loginWithGoogle(credential);
+    } catch (err) {
+      toast.error('Não foi possível entrar com o Google', {
+        description: err instanceof ApiError ? err.message : 'Tente novamente',
+      });
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +88,16 @@ export function RegisterPage() {
               Criar conta
             </Button>
           </form>
+          {googleSignInEnabled && (
+            <>
+              <div className="my-4 flex items-center gap-3">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">ou</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <GoogleSignInButton onCredential={onGoogle} text="signup_with" />
+            </>
+          )}
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Já tem conta?{' '}
             <Link to="/login" className="font-medium text-primary hover:underline">

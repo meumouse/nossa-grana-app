@@ -11,6 +11,8 @@ interface AuthContextValue {
   user: User | null;
   status: Status;
   login: (email: string, password: string) => Promise<void>;
+  /** Login/cadastro com Google: recebe o ID token (`credential`) do GIS. */
+  loginWithGoogle: (credential: string) => Promise<void>;
   register: (input: { email: string; password: string; name?: string }) => Promise<void>;
   logout: () => Promise<void>;
   /** Atualiza o usuário em memória + localStorage (ex.: após salvar o perfil). */
@@ -51,6 +53,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     finishAuth(res.user, res.accessToken, res.refreshToken);
   };
 
+  const loginWithGoogle = async (credential: string) => {
+    const res = await authApi.google({ credential });
+    finishAuth(res.user, res.accessToken, res.refreshToken);
+  };
+
   const register = async (input: { email: string; password: string; name?: string }) => {
     const res = await authApi.register(input);
     finishAuth(res.user, res.accessToken, res.refreshToken);
@@ -71,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, status, login, register, logout, updateUser }),
+    () => ({ user, status, login, loginWithGoogle, register, logout, updateUser }),
     [user, status],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
