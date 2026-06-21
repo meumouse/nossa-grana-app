@@ -3,11 +3,46 @@
 @tailwind utilities;
 
 @layer base {
-  /* Tema escuro elegante com accent teal/esmeralda (padrão "Apex").
-     Fundo slate profundo, cards um tom acima, e o teal como cor primária
-     de ação/destaque. :root e .dark são idênticos para fixar o dark
-     independente da preferência do sistema. */
-  :root,
+  /* Paleta com accent teal/esmeralda (padrão "Apex"). O tema é escolhido pelo
+     usuário (claro/escuro/sistema): :root é o tema CLARO (padrão) e a classe
+     .dark — aplicada no <html> pelo ThemeProvider — ativa o tema ESCURO. */
+  :root {
+    --background: 210 25% 98%;
+    --foreground: 222 22% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 22% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 22% 14%;
+    /* Teal/esmeralda — cor primária de ação e destaque (um tom mais fechado
+       para contraste suficiente sobre fundos claros). */
+    --primary: 168 64% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 20% 94%;
+    --secondary-foreground: 222 22% 20%;
+    --muted: 215 20% 95%;
+    --muted-foreground: 215 14% 42%;
+    --accent: 215 22% 92%;
+    --accent-foreground: 222 22% 16%;
+    /* Semântica de despesa/receita/alerta, em tons coerentes com o claro. */
+    --destructive: 4 68% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 158 58% 38%;
+    --success-foreground: 0 0% 100%;
+    --warning: 36 84% 44%;
+    --warning-foreground: 0 0% 100%;
+    --border: 215 20% 88%;
+    --input: 215 20% 86%;
+    --ring: 168 64% 40%;
+    --radius: 0.75rem;
+    /* Paleta para gráficos (recharts) — teal + tons de apoio. */
+    --chart-1: 168 64% 38%;
+    --chart-2: 38 78% 48%;
+    --chart-3: 199 72% 46%;
+    --chart-4: 276 48% 52%;
+    --chart-5: 330 62% 52%;
+  }
+
+  /* Tema escuro elegante: fundo slate profundo, cards um tom acima, teal vivo. */
   .dark {
     --background: 222 18% 8%;
     --foreground: 210 20% 92%;
@@ -15,7 +50,6 @@
     --card-foreground: 210 20% 92%;
     --popover: 222 16% 11%;
     --popover-foreground: 210 20% 92%;
-    /* Teal/esmeralda — cor primária de ação e destaque. */
     --primary: 168 64% 42%;
     --primary-foreground: 200 30% 7%;
     --secondary: 222 14% 16%;
@@ -24,7 +58,6 @@
     --muted-foreground: 215 14% 60%;
     --accent: 222 14% 18%;
     --accent-foreground: 210 20% 96%;
-    /* Semântica de despesa/receita/alerta, em tons coerentes com o dark. */
     --destructive: 4 62% 56%;
     --destructive-foreground: 210 20% 96%;
     --success: 158 52% 46%;
@@ -35,7 +68,6 @@
     --input: 222 14% 22%;
     --ring: 168 64% 42%;
     --radius: 0.75rem;
-    /* Paleta para gráficos (recharts) — teal + tons de apoio. */
     --chart-1: 168 64% 45%;
     --chart-2: 38 80% 60%;
     --chart-3: 199 70% 55%;

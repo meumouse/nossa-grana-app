@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Sparkles, KeyRound, ShieldCheck, SlidersHorizontal, Search } from 'lucide-react';
+import { Loader2, Sparkles, KeyRound, ShieldCheck, SlidersHorizontal, Search, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
+import { useTheme } from '@/ui/ThemeProvider';
+import type { ThemeMode } from '@/ui/ThemeProvider';
 import { workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
 import type { LlmModelInfo, LlmProvider, WorkspaceSettings, WorkspaceSettingsInput } from '@/api/types';
@@ -31,6 +33,12 @@ const MODEL_SUGGESTIONS: Record<LlmProvider, string[]> = {
   anthropic: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
   google: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
 };
+// Opções de tema (preferência do dispositivo, salva localmente no navegador).
+const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: 'light', label: 'Claro' },
+  { value: 'dark', label: 'Escuro' },
+  { value: 'system', label: 'Sistema (segue o aparelho)' },
+];
 const CURRENCIES = ['BRL', 'USD', 'EUR', 'GBP', 'ARS'];
 const CURRENCY_SYMBOLS: Record<string, string> = {
   BRL: 'R$',
@@ -55,6 +63,7 @@ function handleError(err: unknown) {
 
 export function SettingsPage() {
   const { activeId, active } = useWorkspace();
+  const { theme, setTheme } = useTheme();
   const qc = useQueryClient();
   const canEdit = active?.role === 'OWNER' || active?.role === 'ADMIN';
 
@@ -204,6 +213,34 @@ export function SettingsPage() {
           Preferências do perfil <span className="font-medium text-foreground">{active?.name}</span>.
         </p>
       </div>
+
+      <Card className="max-w-2xl p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Palette className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold">Aparência</h2>
+        </div>
+        <p className="mb-5 text-sm text-muted-foreground">
+          Modo de cor da interface. Esta preferência fica salva apenas neste aparelho.
+        </p>
+        <div className="space-y-2">
+          <Label htmlFor="theme">Tema</Label>
+          <Select value={theme} onValueChange={(v) => setTheme(v as ThemeMode)}>
+            <SelectTrigger id="theme" className="w-full sm:w-64">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {THEME_OPTIONS.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            “Sistema” acompanha automaticamente o tema claro/escuro do seu dispositivo.
+          </p>
+        </div>
+      </Card>
 
       <Card className="max-w-2xl p-6">
         <div className="mb-4 flex items-center gap-2">

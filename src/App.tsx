@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { WorkspaceProvider } from './workspace/WorkspaceProvider';
 import { SyncProvider } from './sync/SyncProvider';
 import { PrivacyProvider } from './ui/PrivacyProvider';
+import { ThemeProvider } from './ui/ThemeProvider';
 import { AppLayout } from './components/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -83,12 +84,14 @@ function AppRoutes() {
 
 export function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

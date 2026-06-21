@@ -19,6 +19,9 @@ import {
   CloudOff,
   LogOut,
   Menu as MenuIcon,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -30,6 +33,33 @@ import { useAuth } from '@/auth/AuthProvider';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
 import { useSync } from '@/sync/SyncProvider';
 import { usePrivacy } from '@/ui/PrivacyProvider';
+import { useTheme } from '@/ui/ThemeProvider';
+import type { ThemeMode } from '@/ui/ThemeProvider';
+
+// Ordem de ciclagem do botão de tema no header.
+const THEME_CYCLE: ThemeMode[] = ['light', 'dark', 'system'];
+const THEME_LABEL: Record<ThemeMode, string> = {
+  light: 'Tema claro',
+  dark: 'Tema escuro',
+  system: 'Tema do sistema',
+};
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length];
+  const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(next)}
+      aria-label="Alternar tema"
+      title={`${THEME_LABEL[theme]} — clique para ${THEME_LABEL[next].toLowerCase()}`}
+    >
+      <Icon className="h-5 w-5" />
+    </Button>
+  );
+}
 
 const LINKS = [
   { to: '/', label: 'Início', icon: LayoutDashboard },
@@ -206,6 +236,8 @@ export function AppLayout() {
             >
               {hidden ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </Button>
+
+            <ThemeToggle />
 
             <SyncStatus />
           </div>
