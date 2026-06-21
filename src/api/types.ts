@@ -23,6 +23,7 @@ export type MemberRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 export interface User {
   id: string;
   email: string;
+  emailVerified: boolean;
   name: string | null;
   avatarUrl: string | null;
   locale: string;

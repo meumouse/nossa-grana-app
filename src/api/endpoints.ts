@@ -33,6 +33,14 @@ export const authApi = {
     api.post<AuthResponse>('/api/auth/login', body, false),
   me: () => api.get<{ user: User }>('/api/auth/me'),
   logout: (refreshToken: string) => api.post<void>('/api/auth/logout', { refreshToken }, false),
+  forgotPassword: (email: string) =>
+    api.post<{ message: string }>('/api/auth/forgot-password', { email }, false),
+  resetPassword: (token: string, password: string) =>
+    api.post<{ message: string }>('/api/auth/reset-password', { token, password }, false),
+  verifyEmail: (token: string) =>
+    api.post<{ message: string }>('/api/auth/verify-email', { token }, false),
+  resendVerification: () =>
+    api.post<{ message: string }>('/api/auth/resend-verification', undefined, true),
 };
 
 // ---- Workspaces ----

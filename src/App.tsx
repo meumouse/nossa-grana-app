@@ -7,6 +7,9 @@ import { PrivacyProvider } from './ui/PrivacyProvider';
 import { AppLayout } from './components/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AccountsPage } from './pages/AccountsPage';
 import { TransactionsPage } from './pages/TransactionsPage';
@@ -49,6 +52,9 @@ function AppRoutes() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -56,6 +62,8 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Verificação de e-mail funciona logado (usuário clicou no link do e-mail). */}
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route element={<AuthedShell />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/accounts" element={<AccountsPage />} />
