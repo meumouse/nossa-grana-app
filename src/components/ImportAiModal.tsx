@@ -49,6 +49,28 @@ interface Row {
   accountId: string;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Acompanha a confirmação processada em background (fila). Faz polling do lote
+ * até CONFIRMED (devolve qtd. importada) ou FAILED (lança com a mensagem).
+ * Desiste após ~2min para não travar a UI caso o worker esteja indisponível.
+ */
+async function waitForImport(workspaceId: string, batchId: string): Promise<number> {
+  const maxAttempts = 80; // ~2min a 1,5s por tentativa
+  for (let i = 0; i < maxAttempts; i++) {
+    await sleep(1500);
+    const { batch } = await importApi.get(workspaceId, batchId);
+    if (batch.status === 'CONFIRMED') {
+      return (batch.items ?? []).filter((it) => it.status === 'IMPORTED').length;
+    }
+    if (batch.status === 'FAILED') {
+      throw new Error(batch.error ?? 'Falha ao importar os lançamentos.');
+    }
+  }
+  throw new Error('A importação ainda está em andamento. Confira o extrato em instantes.');
+}
+
 function itemToRow(it: ImportItem, fallbackAccount: string): Row {
   return {
     id: it.id,
@@ -131,7 +153,12 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
           status: 'ACCEPTED',
         });
       }
-      const { imported } = await importApi.confirm(workspaceId, batch.id, accountId || undefined);
+      const res = await importApi.confirm(workspaceId, batch.id, accountId || undefined);
+      // Com fila, a API só enfileira (202): acompanha o processamento em
+      // background por polling até concluir. Sem fila, já vem o total importado.
+      const imported = res.queued
+        ? await waitForImport(workspaceId, batch.id)
+        : (res.imported ?? 0);
       toast.success(`${imported} lançamento(s) importado(s).`);
       await syncNow();
       close();
@@ -147,7 +174,13 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
 
   return (
     <Dialog open={opened} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent
+        className="max-w-2xl"
+        // O seletor de arquivos do SO rouba o foco da janela ao abrir; sem isto
+        // o Radix entende como "foco fora" e fecha o modal ao clicar no upload.
+        // Mantém o fechamento por clique no overlay (pointerdown) e por Esc.
+        onFocusOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -210,12 +243,12 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
         {phase === 'review' && batch && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <FileText className="h-4 w-4" />
                 {batch.filename ?? 'documento'}
                 <Badge variant="muted">{rows.length} encontrado(s)</Badge>
                 <Badge variant="success">{acceptedCount} marcado(s)</Badge>
-              </p>
+              </div>
               <Button variant="ghost" size="sm" onClick={reset}>
                 <RotateCcw className="h-4 w-4" />
                 Recomeçar

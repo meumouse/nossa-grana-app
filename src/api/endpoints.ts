@@ -156,10 +156,14 @@ export const importApi = {
   get: (ws: string, id: string) => api.get<{ batch: ImportBatch }>(wsPath(ws, `/imports/${id}`)),
   patchItem: (ws: string, id: string, itemId: string, body: ImportItemPatch) =>
     api.patch<{ item: ImportItem }>(wsPath(ws, `/imports/${id}/items/${itemId}`), body),
+  // Quando há fila (Redis), a API responde 202 com queued:true e o processamento
+  // segue em background — acompanhe via `get` (polling) até CONFIRMED/FAILED.
+  // Sem fila, vem queued:false com `imported` já preenchido.
   confirm: (ws: string, id: string, defaultAccountId?: string) =>
-    api.post<{ batch: ImportBatch; imported: number }>(wsPath(ws, `/imports/${id}/confirm`), {
-      defaultAccountId,
-    }),
+    api.post<{ batch: ImportBatch; imported?: number; queued: boolean }>(
+      wsPath(ws, `/imports/${id}/confirm`),
+      { defaultAccountId },
+    ),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/imports/${id}`)),
 };
 

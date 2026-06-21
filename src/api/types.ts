@@ -365,7 +365,13 @@ export interface InvestmentTransaction {
 
 // ---- Importação por LLM ----
 export type ImportSource = 'PDF' | 'IMAGE' | 'CSV' | 'OFX';
-export type ImportStatus = 'PROCESSING' | 'PENDING_REVIEW' | 'CONFIRMED' | 'CANCELED' | 'FAILED';
+export type ImportStatus =
+  | 'PROCESSING'
+  | 'PENDING_REVIEW'
+  | 'IMPORTING'
+  | 'CONFIRMED'
+  | 'CANCELED'
+  | 'FAILED';
 export type ImportItemStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'IMPORTED';
 
 export interface ImportItem {
