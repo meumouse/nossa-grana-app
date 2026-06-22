@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   ArrowUpRight,
   ArrowDownRight,
-  Wallet,
   TrendingUp,
   Users,
   Check,
+  CalendarClock,
+  CreditCard,
+  ArrowRight,
 } from 'lucide-react';
 import {
   Area,
@@ -42,66 +45,64 @@ const CHART_FALLBACK = [
   'hsl(var(--chart-5))',
 ];
 
-function StatCard({
+/** Cartão compacto de métrica (Receitas / Despesas) — padrão Income/Budget da ref. */
+function MiniStat({
   label,
   value,
   icon,
-  badge,
-  valueClassName,
-  highlight,
+  tone,
 }: {
   label: string;
   value: string;
-  icon?: React.ReactNode;
-  badge?: { text: string; tone: 'success' | 'destructive' | 'muted' };
-  valueClassName?: string;
-  highlight?: boolean;
+  icon: React.ReactNode;
+  tone: 'success' | 'destructive';
 }) {
   return (
-    <Card
-      className={cn(
-        highlight && 'border-transparent bg-gradient-to-br from-primary to-primary/75 text-primary-foreground shadow-md',
-      )}
-    >
-      <CardContent className="p-4 sm:p-5">
-        <div className="flex items-center justify-between">
-          <span
-            className={cn(
-              'text-xs font-semibold uppercase tracking-wide',
-              highlight ? 'text-primary-foreground/80' : 'text-muted-foreground',
-            )}
-          >
-            {label}
-          </span>
-          <span
-            className={cn(
-              'flex h-8 w-8 items-center justify-center rounded-full',
-              highlight ? 'bg-primary-foreground/15' : 'bg-muted',
-            )}
-          >
-            {icon}
-          </span>
-        </div>
-        <p className={cn('mt-2 text-2xl font-extrabold tracking-tight', valueClassName)}>{value}</p>
-        {badge && (
-          <div className="mt-1.5 flex items-center gap-1.5 text-xs">
-            <Badge
-              variant={highlight ? 'secondary' : badge.tone}
-              className={cn(highlight && 'bg-primary-foreground/15 text-primary-foreground')}
-            >
-              {badge.text}
-            </Badge>
-            <span className={cn(highlight ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-              este mês
-            </span>
-          </div>
-        )}
+    <Card>
+      <CardContent className="p-4">
+        <span
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-full',
+            tone === 'success' ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive',
+          )}
+        >
+          {icon}
+        </span>
+        <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className={cn('mt-0.5 text-lg font-extrabold tracking-tight', tone === 'success' ? 'text-success' : 'text-destructive')}>
+          {value}
+        </p>
       </CardContent>
     </Card>
   );
 }
 
+/** Tile de ação rápida: ícone em quadrado arredondado colorido + rótulo. */
+function QuickAction({
+  label,
+  icon,
+  tone,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  tone: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col items-center gap-1.5 rounded-2xl border border-border/60 bg-card p-3 text-center shadow-soft transition-colors hover:bg-accent/50"
+    >
+      <span className={cn('flex h-11 w-11 items-center justify-center rounded-2xl', tone)}>{icon}</span>
+      <span className="text-xs font-medium leading-tight">{label}</span>
+    </button>
+  );
+}
+
 export function DashboardPage() {
+  const navigate = useNavigate();
   const { activeId, active } = useWorkspace();
   const { user } = useAuth();
   const accounts = useLiveAccounts(activeId) ?? [];
@@ -112,6 +113,11 @@ export function DashboardPage() {
   const { hidden } = usePrivacy();
   const { syncNow } = useSync();
   const [opened, setOpened] = useState(false);
+  const [txType, setTxType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
+  const openNew = (type: 'INCOME' | 'EXPENSE' = 'EXPENSE') => {
+    setTxType(type);
+    setOpened(true);
+  };
 
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -202,7 +208,6 @@ export function DashboardPage() {
   }, [txs, categories, ym]);
 
   const netCents = stats.incomeCents - stats.expenseCents;
-  const expenseShare = stats.incomeCents > 0 ? Math.round((stats.expenseCents / stats.incomeCents) * 100) : 0;
 
   // Despesas compartilhadas em que a MINHA parte (vinculada ao meu usuário) ainda
   // não foi paga — o painel "Despesas que você deve pagar".
@@ -261,41 +266,96 @@ export function DashboardPage() {
             Aqui está o resumo de {active?.name ?? 'suas finanças'}.
           </p>
         </div>
-        <Button onClick={() => setOpened(true)}>
+        <Button className="hidden md:inline-flex" onClick={() => openNew('EXPENSE')}>
           <Plus className="h-4 w-4" />
           Lançar
         </Button>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard
-          highlight
-          label="Saldo consolidado"
-          value={formatMoneyCents(stats.totalCents, hidden)}
-          icon={<Wallet className="h-4 w-4" />}
-          badge={{
-            text: `${netCents >= 0 ? '+' : '−'}${formatMoneyCents(Math.abs(netCents), hidden)}`,
-            tone: 'muted',
-          }}
-        />
-        <StatCard
-          label="Receitas do mês"
-          value={formatMoneyCents(stats.incomeCents, hidden)}
-          valueClassName="text-success"
-          icon={<ArrowUpRight className="h-4 w-4 text-success" />}
-          badge={{ text: 'entradas', tone: 'success' }}
-        />
-        <StatCard
-          label="Despesas do mês"
-          value={formatMoneyCents(stats.expenseCents, hidden)}
-          valueClassName="text-destructive"
-          icon={<ArrowDownRight className="h-4 w-4 text-destructive" />}
-          badge={{
-            text: stats.incomeCents > 0 ? `${expenseShare}% das receitas` : 'saídas',
-            tone: 'destructive',
-          }}
-        />
+      {/* Hero de saldo + ações + mini-stats + ações rápidas */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Card hero (saldo consolidado) */}
+        <Card className="border-transparent bg-gradient-to-br from-primary to-primary/75 text-primary-foreground shadow-md lg:col-span-2">
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-primary-foreground/80">
+                Saldo consolidado
+              </span>
+              <Badge variant="secondary" className="bg-primary-foreground/15 text-primary-foreground">
+                {netCents >= 0 ? '+' : '−'}
+                {formatMoneyCents(Math.abs(netCents), hidden)} este mês
+              </Badge>
+            </div>
+            <p className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
+              {formatMoneyCents(stats.totalCents, hidden)}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => openNew('EXPENSE')}
+                className="flex items-center justify-center gap-2 rounded-xl bg-primary-foreground px-4 py-2.5 text-sm font-semibold text-primary shadow-sm transition-transform active:scale-[0.98]"
+              >
+                <Plus className="h-4 w-4" />
+                Lançar
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/transactions')}
+                className="flex items-center justify-center gap-2 rounded-xl bg-primary-foreground/15 px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-foreground/25"
+              >
+                Ver extrato
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Mini-stats Receitas / Despesas (padrão Income/Budget) */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
+          <MiniStat
+            label="Receitas do mês"
+            value={formatMoneyCents(stats.incomeCents, hidden)}
+            tone="success"
+            icon={<ArrowUpRight className="h-4 w-4" />}
+          />
+          <MiniStat
+            label="Despesas do mês"
+            value={formatMoneyCents(stats.expenseCents, hidden)}
+            tone="destructive"
+            icon={<ArrowDownRight className="h-4 w-4" />}
+          />
+        </div>
+      </div>
+
+      {/* Ações rápidas */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold">Ações rápidas</h2>
+        <div className="grid grid-cols-4 gap-2.5 sm:gap-3">
+          <QuickAction
+            label="Lançar"
+            tone="bg-primary/15 text-primary"
+            icon={<Plus className="h-5 w-5" />}
+            onClick={() => openNew('EXPENSE')}
+          />
+          <QuickAction
+            label="A pagar"
+            tone="bg-warning/15 text-warning"
+            icon={<CalendarClock className="h-5 w-5" />}
+            onClick={() => navigate('/payables')}
+          />
+          <QuickAction
+            label="Investir"
+            tone="bg-success/15 text-success"
+            icon={<TrendingUp className="h-5 w-5" />}
+            onClick={() => navigate('/investments')}
+          />
+          <QuickAction
+            label="Cartões"
+            tone="bg-chart-3/15 text-chart-3"
+            icon={<CreditCard className="h-5 w-5" />}
+            onClick={() => navigate('/cards')}
+          />
+        </div>
       </div>
 
       {/* Despesas compartilhadas que eu devo pagar (minha parte ainda pendente) */}
@@ -536,7 +596,9 @@ export function DashboardPage() {
           onClose={() => setOpened(false)}
           workspaceId={activeId}
           accounts={accounts}
+          cards={cards}
           categories={categories}
+          initialType={txType}
         />
       )}
     </div>

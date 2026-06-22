@@ -33,7 +33,7 @@
     --border: 215 20% 88%;
     --input: 215 20% 86%;
     --ring: 168 64% 40%;
-    --radius: 0.75rem;
+    --radius: 1rem;
     /* Paleta para gráficos (recharts) — teal + tons de apoio. */
     --chart-1: 168 64% 38%;
     --chart-2: 38 78% 48%;
@@ -67,7 +67,7 @@
     --border: 222 14% 18%;
     --input: 222 14% 22%;
     --ring: 168 64% 42%;
-    --radius: 0.75rem;
+    --radius: 1rem;
     --chart-1: 168 64% 45%;
     --chart-2: 38 80% 60%;
     --chart-3: 199 70% 55%;

@@ -33,8 +33,19 @@ export function BottomNav({ onMore }: { onMore: () => void }) {
               cn(itemClass, isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground')
             }
           >
-            <link.icon className="h-5 w-5" />
-            {link.label}
+            {({ isActive }) => (
+              <>
+                <span
+                  className={cn(
+                    'flex h-7 w-12 items-center justify-center rounded-full transition-colors',
+                    isActive && 'bg-primary/10',
+                  )}
+                >
+                  <link.icon className="h-5 w-5" />
+                </span>
+                {link.label}
+              </>
+            )}
           </NavLink>
         ))}
         <button
@@ -43,7 +54,9 @@ export function BottomNav({ onMore }: { onMore: () => void }) {
           className={cn(itemClass, 'text-muted-foreground hover:text-foreground')}
           aria-label="Mais opções"
         >
-          <MoreHorizontal className="h-5 w-5" />
+          <span className="flex h-7 w-12 items-center justify-center">
+            <MoreHorizontal className="h-5 w-5" />
+          </span>
           Mais
         </button>
       </div>

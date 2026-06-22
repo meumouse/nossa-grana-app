@@ -22,6 +22,7 @@ import { useSync } from '@/sync/SyncProvider';
 import { payTransactionLocal, unpayTransactionLocal } from '@/sync/mutations';
 import { installmentApi, transactionApi, workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
+import { FiltersSheet, FilterField } from '@/components/FiltersSheet';
 import { LoadMore } from '@/components/LoadMore';
 import { SelectionBar } from '@/components/SelectionBar';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -290,11 +291,11 @@ export function InstallmentsPage() {
     return m;
   }, [liveTxs]);
 
-  const filtersActive =
-    search.trim() !== '' ||
-    categoryFilter !== 'ALL' ||
-    accountFilter !== 'ALL' ||
-    cardFilter !== 'ALL';
+  // Filtros da sidebar (sem a busca por texto, que fica inline) — alimenta o badge.
+  const filterCount =
+    (categoryFilter !== 'ALL' ? 1 : 0) +
+    (accountFilter !== 'ALL' ? 1 : 0) +
+    (cardFilter !== 'ALL' ? 1 : 0);
   const items = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allItems.filter((p) => {
@@ -361,8 +362,8 @@ export function InstallmentsPage() {
       </div>
 
       {!isLoading && !isError && allItems.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px] flex-1">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar por descrição"
@@ -371,55 +372,57 @@ export function InstallmentsPage() {
               className="pl-9"
             />
           </div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todas as categorias</SelectItem>
-              {expenseCats.map((c) => (
-                <SelectItem key={c.key} value={c.id ?? c.key}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {accounts.length > 0 && (
-            <Select value={accountFilter} onValueChange={setAccountFilter}>
-              <SelectTrigger className="w-full sm:w-44">
-                <SelectValue placeholder="Conta" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todas as contas</SelectItem>
-                {accounts.map((a) => (
-                  <SelectItem key={a.key} value={a.id ?? a.key}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {cards.length > 0 && (
-            <Select value={cardFilter} onValueChange={setCardFilter}>
-              <SelectTrigger className="w-full sm:w-44">
-                <SelectValue placeholder="Cartão" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todos os cartões</SelectItem>
-                {cards.map((c) => (
-                  <SelectItem key={c.key} value={c.id ?? c.key}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {filtersActive && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <X className="h-4 w-4" />
-              Limpar
-            </Button>
-          )}
+          <FiltersSheet activeCount={filterCount} onClear={clearFilters}>
+            <FilterField label="Categoria">
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todas as categorias</SelectItem>
+                  {expenseCats.map((c) => (
+                    <SelectItem key={c.key} value={c.id ?? c.key}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            {accounts.length > 0 && (
+              <FilterField label="Conta">
+                <Select value={accountFilter} onValueChange={setAccountFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Conta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Todas as contas</SelectItem>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.key} value={a.id ?? a.key}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            )}
+            {cards.length > 0 && (
+              <FilterField label="Cartão">
+                <Select value={cardFilter} onValueChange={setCardFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Cartão" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Todos os cartões</SelectItem>
+                    {cards.map((c) => (
+                      <SelectItem key={c.key} value={c.id ?? c.key}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            )}
+          </FiltersSheet>
         </div>
       )}
 

@@ -65,8 +65,12 @@ export default {
       },
       borderRadius: {
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        md: 'calc(var(--radius) - 4px)',
+        sm: 'calc(var(--radius) - 8px)',
+      },
+      // Sombra suave do "card flutuante" (padrão fintech) — leve, em duas camadas.
+      boxShadow: {
+        soft: '0 1px 2px rgba(16,24,40,.04), 0 8px 24px -6px rgba(16,24,40,.10)',
       },
       keyframes: {
         'accordion-down': {

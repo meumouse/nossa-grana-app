@@ -14,8 +14,13 @@ import {
   Search,
   RefreshCw,
   X,
+  ArrowUpRight,
+  ArrowDownRight,
+  ArrowLeftRight,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Fab } from '@/components/ui/fab';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -26,6 +31,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -59,6 +65,7 @@ import { ConsistencyCheckModal } from '@/components/ConsistencyCheckModal';
 import { RecurringFormModal, type RecurringInitial } from '@/components/RecurringFormModal';
 import { SuggestedRecurringSection } from '@/components/SuggestedRecurringSection';
 import { LoadMore } from '@/components/LoadMore';
+import { FiltersSheet, FilterField } from '@/components/FiltersSheet';
 import { SelectionBar } from '@/components/SelectionBar';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { usePagedList } from '@/hooks/usePagedList';
@@ -166,12 +173,14 @@ export function TransactionsPage() {
   const [removeDupesOpen, setRemoveDupesOpen] = useState(false);
   const [removingDupes, setRemovingDupes] = useState(false);
 
-  const filtersActive =
-    search.trim() !== '' ||
-    accountFilter !== 'ALL' ||
-    categoryFilter !== 'ALL' ||
-    typeFilter !== 'ALL' ||
-    Boolean(range?.from || range?.to);
+  // Filtros da sidebar (sem a busca por texto, que fica inline) — alimenta o badge.
+  const filterCount =
+    (accountFilter !== 'ALL' ? 1 : 0) +
+    (categoryFilter !== 'ALL' ? 1 : 0) +
+    (typeFilter !== 'ALL' ? 1 : 0) +
+    (range?.from || range?.to ? 1 : 0);
+
+  const filtersActive = search.trim() !== '' || filterCount > 0;
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -323,17 +332,28 @@ export function TransactionsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Extrato</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            className="sm:w-auto sm:px-4"
-            onClick={() => setCheckOpened(true)}
-            disabled={txs.length === 0}
-            title="Verificar inconsistências"
-          >
-            <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline">Verificar inconsistências</span>
-          </Button>
+          {/* Ações de IA agrupadas num só botão (Importar / Verificar). */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="sm:w-auto sm:px-4" title="Ações de IA">
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">IA</span>
+                <ChevronDown className="hidden h-4 w-4 opacity-70 sm:inline" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Inteligência artificial</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setImportOpened(true)}>
+                <Sparkles className="h-4 w-4" />
+                Importar com IA
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCheckOpened(true)} disabled={txs.length === 0}>
+                <AlertTriangle className="h-4 w-4" />
+                Verificar inconsistências
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant={selectMode ? 'secondary' : 'outline'}
             size="icon"
@@ -343,16 +363,6 @@ export function TransactionsPage() {
           >
             <CheckSquare className="h-4 w-4" />
             <span className="hidden sm:inline">{selectMode ? 'Cancelar' : 'Selecionar'}</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="sm:w-auto sm:px-4"
-            onClick={() => setImportOpened(true)}
-            title="Importar com IA"
-          >
-            <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline">Importar com IA</span>
           </Button>
           <Button onClick={openNew}>
             <Plus className="h-4 w-4" />
@@ -388,7 +398,7 @@ export function TransactionsPage() {
       )}
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as StatusFilter)}>
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-3 sm:inline-flex sm:w-auto">
           <TabsTrigger value="ALL">Todos</TabsTrigger>
           <TabsTrigger value="COMPLETED">Efetivados</TabsTrigger>
           <TabsTrigger value="PENDING">Pendentes</TabsTrigger>
@@ -396,54 +406,64 @@ export function TransactionsPage() {
       </Tabs>
 
       <div className="space-y-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por descrição ou observação"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <DateRangePicker value={range} onChange={setRange} />
-          <Select value={accountFilter} onValueChange={setAccountFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Conta" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todas as contas</SelectItem>
-              {accounts.map((a) => (
-                <SelectItem key={a.key} value={a.key}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todas as categorias</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.key} value={c.key}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todos os tipos</SelectItem>
-              <SelectItem value="INCOME">Receitas</SelectItem>
-              <SelectItem value="EXPENSE">Despesas</SelectItem>
-              <SelectItem value="TRANSFER">Transferências</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por descrição ou observação"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <FiltersSheet activeCount={filterCount} onClear={clearFilters}>
+            <FilterField label="Período">
+              <DateRangePicker value={range} onChange={setRange} />
+            </FilterField>
+            <FilterField label="Conta">
+              <Select value={accountFilter} onValueChange={setAccountFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todas as contas</SelectItem>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.key} value={a.key}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <FilterField label="Categoria">
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todas as categorias</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.key} value={c.key}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <FilterField label="Tipo">
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todos os tipos</SelectItem>
+                  <SelectItem value="INCOME">Receitas</SelectItem>
+                  <SelectItem value="EXPENSE">Despesas</SelectItem>
+                  <SelectItem value="TRANSFER">Transferências</SelectItem>
+                </SelectContent>
+              </Select>
+            </FilterField>
+          </FiltersSheet>
         </div>
         {filtersActive && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -494,11 +514,29 @@ export function TransactionsPage() {
                 )}
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   onClick={() => (selectMode ? toggleSelected(t.key) : undefined)}
                   disabled={!selectMode}
                 >
-                  <div className="min-w-0">
+                  <span
+                    className={cn(
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
+                      transfer
+                        ? 'bg-muted text-muted-foreground'
+                        : income
+                          ? 'bg-success/15 text-success'
+                          : 'bg-destructive/15 text-destructive',
+                    )}
+                  >
+                    {transfer ? (
+                      <ArrowLeftRight className="h-4 w-4" />
+                    ) : income ? (
+                      <ArrowUpRight className="h-4 w-4" />
+                    ) : (
+                      <ArrowDownRight className="h-4 w-4" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate font-medium">{t.description}</span>
                       {t.shared && (
@@ -604,6 +642,10 @@ export function TransactionsPage() {
           />
         </div>
       )}
+
+      {/* FAB de "Novo lançamento" (mobile) — escondido no modo seleção p/ não
+          colidir com a barra de seleção. */}
+      {!selectMode && <Fab label="Novo lançamento" icon={<Plus className="h-6 w-6" />} onClick={openNew} />}
 
       {/* Barra de ação da seleção em massa */}
       {selectMode && (

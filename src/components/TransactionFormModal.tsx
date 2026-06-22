@@ -26,6 +26,8 @@ interface Props {
   cards?: LocalCreditCard[];
   categories: LocalCategory[];
   editing?: LocalTransaction | null;
+  /** Tipo pré-selecionado ao abrir um lançamento novo (ex.: hero do dashboard). */
+  initialType?: 'INCOME' | 'EXPENSE';
 }
 
 // Valor do seletor de origem codifica conta vs cartão ("acc:<key>" | "card:<key>").
@@ -49,6 +51,7 @@ export function TransactionFormModal({
   cards = [],
   categories,
   editing,
+  initialType,
 }: Props) {
   const { syncNow } = useSync();
   const [type, setType] = useState<Kind>('EXPENSE');
@@ -77,7 +80,7 @@ export function TransactionFormModal({
       setDate(new Date(editing.date));
       setPending(editing.status === 'PENDING');
     } else {
-      setType('EXPENSE');
+      setType(initialType ?? 'EXPENSE');
       setAmount('');
       setDescription('');
       setSource(accounts[0] ? accVal(accounts[0].key) : cards[0] ? cardVal(cards[0].key) : '');
@@ -85,7 +88,7 @@ export function TransactionFormModal({
       setDate(new Date());
       setPending(false);
     }
-  }, [opened, editing, accounts, cards]);
+  }, [opened, editing, accounts, cards, initialType]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
