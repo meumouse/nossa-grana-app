@@ -180,10 +180,13 @@ export function InvestmentsPage() {
           {assets.length > 0 && (
             <Button
               variant={sel.active ? 'secondary' : 'outline'}
+              size="icon"
+              className="sm:w-auto sm:px-4"
               onClick={() => (sel.active ? sel.exit() : sel.enter())}
+              title={sel.active ? 'Cancelar seleção' : 'Selecionar'}
             >
               <CheckSquare className="h-4 w-4" />
-              {sel.active ? 'Cancelar' : 'Selecionar'}
+              <span className="hidden sm:inline">{sel.active ? 'Cancelar' : 'Selecionar'}</span>
             </Button>
           )}
           <Button variant="outline" onClick={openAsset}>

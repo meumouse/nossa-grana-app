@@ -63,7 +63,7 @@ function StatCard({
         highlight && 'border-transparent bg-gradient-to-br from-primary to-primary/75 text-primary-foreground shadow-md',
       )}
     >
-      <CardContent className="p-5">
+      <CardContent className="p-4 sm:p-5">
         <div className="flex items-center justify-between">
           <span
             className={cn(
@@ -254,7 +254,7 @@ export function DashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
             Olá, {user?.name?.split(' ')[0] ?? 'tudo bem'} 👋
           </h1>
           <p className="text-sm text-muted-foreground">

@@ -20,7 +20,6 @@ import {
   Cloud,
   CloudOff,
   LogOut,
-  Menu as MenuIcon,
   Sun,
   Moon,
   Monitor,
@@ -30,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { initialsFrom } from '@/lib/avatars';
 import { useAuth } from '@/auth/AuthProvider';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
@@ -39,6 +38,7 @@ import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useTheme } from '@/ui/ThemeProvider';
 import type { ThemeMode } from '@/ui/ThemeProvider';
 import { InvitationsNotice } from '@/components/InvitationsNotice';
+import { BottomNav } from '@/components/BottomNav';
 import { PENDING_INVITE_KEY } from '@/pages/InviteAcceptPage';
 
 // Ordem de ciclagem do botão de tema no header.
@@ -66,7 +66,25 @@ function ThemeToggle() {
   );
 }
 
-const LINKS = [
+/** Linha de tema com rótulo — usada dentro do menu lateral (sheet) no mobile,
+ * onde o botão de tema do header fica oculto. */
+function ThemeRow() {
+  const { theme, setTheme } = useTheme();
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length]!;
+  const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
+  return (
+    <button
+      type="button"
+      onClick={() => setTheme(next)}
+      className="flex w-full items-center gap-3 rounded-lg border bg-background/40 px-3 py-2 text-sm font-medium transition-colors hover:bg-accent"
+    >
+      <Icon className="h-[18px] w-[18px]" />
+      {THEME_LABEL[theme]}
+    </button>
+  );
+}
+
+export const LINKS = [
   { to: '/', label: 'Início', icon: LayoutDashboard },
   { to: '/transactions', label: 'Extrato', icon: ArrowLeftRight },
   { to: '/accounts', label: 'Contas', icon: Wallet },
@@ -151,7 +169,7 @@ function ProfileBlock({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate, mobile }: { onNavigate?: () => void; mobile?: boolean }) {
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="px-2 pt-1">
@@ -163,7 +181,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </p>
         <NavLinks onNavigate={onNavigate} />
       </div>
-      <div className="px-2 pb-1">
+      <div className="space-y-2 px-2 pb-1">
+        {/* O botão de tema do header some no mobile; aqui no sheet ele reaparece. */}
+        {mobile && <ThemeRow />}
         <ProfileBlock onNavigate={onNavigate} />
       </div>
     </div>
@@ -226,29 +246,24 @@ export function AppLayout() {
         <SidebarContent />
       </aside>
 
+      {/* Menu completo (sheet) — controlado: abre pelo "Mais" da barra inferior. */}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="left" className="w-72 p-3">
+          <SheetTitle className="sr-only">Navegação</SheetTitle>
+          <SidebarContent mobile onNavigate={() => setOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
       {/* Coluna principal */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b bg-background/85 px-4 backdrop-blur md:px-6">
-          <div className="flex items-center gap-2">
-            <Sheet open={open} onOpenChange={setOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden" aria-label="Menu">
-                  <MenuIcon className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-72 p-3">
-                <SheetTitle className="sr-only">Navegação</SheetTitle>
-                <SidebarContent onNavigate={() => setOpen(false)} />
-              </SheetContent>
-            </Sheet>
-            <span className="md:hidden">
-              <Brand />
-            </span>
-          </div>
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b bg-background/85 px-4 pt-safe-t backdrop-blur md:px-6">
+          <span className="md:hidden">
+            <Brand />
+          </span>
 
           <div className="flex items-center gap-1.5">
             <Select value={activeId ?? undefined} onValueChange={(v) => setActive(v)}>
-              <SelectTrigger className="h-9 w-[140px] sm:w-[160px]">
+              <SelectTrigger className="h-9 w-[128px] sm:w-[160px]">
                 <SelectValue placeholder="Workspace" />
               </SelectTrigger>
               <SelectContent>
@@ -270,17 +285,22 @@ export function AppLayout() {
               {hidden ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </Button>
 
-            <ThemeToggle />
+            {/* Tema fica no header só a partir de sm; no mobile vai p/ o sheet. */}
+            <span className="hidden sm:inline-flex">
+              <ThemeToggle />
+            </span>
 
             <SyncStatus />
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 p-4 md:p-6">
+        <main className="min-w-0 flex-1 p-4 pb-[calc(4rem+env(safe-area-inset-bottom)+1rem)] md:p-6 md:pb-6">
           <PendingInviteRedirect />
           <InvitationsNotice />
           <Outlet />
         </main>
+
+        <BottomNav onMore={() => setOpen(true)} />
       </div>
     </div>
   );

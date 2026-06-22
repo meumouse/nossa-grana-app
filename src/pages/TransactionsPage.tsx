@@ -323,24 +323,41 @@ export function TransactionsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Extrato</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setCheckOpened(true)} disabled={txs.length === 0}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="sm:w-auto sm:px-4"
+            onClick={() => setCheckOpened(true)}
+            disabled={txs.length === 0}
+            title="Verificar inconsistências"
+          >
             <Sparkles className="h-4 w-4" />
-            Verificar inconsistências
+            <span className="hidden sm:inline">Verificar inconsistências</span>
           </Button>
           <Button
             variant={selectMode ? 'secondary' : 'outline'}
+            size="icon"
+            className="sm:w-auto sm:px-4"
             onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            title={selectMode ? 'Cancelar seleção' : 'Selecionar'}
           >
             <CheckSquare className="h-4 w-4" />
-            {selectMode ? 'Cancelar' : 'Selecionar'}
+            <span className="hidden sm:inline">{selectMode ? 'Cancelar' : 'Selecionar'}</span>
           </Button>
-          <Button variant="outline" onClick={() => setImportOpened(true)}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="sm:w-auto sm:px-4"
+            onClick={() => setImportOpened(true)}
+            title="Importar com IA"
+          >
             <Sparkles className="h-4 w-4" />
-            Importar com IA
+            <span className="hidden sm:inline">Importar com IA</span>
           </Button>
           <Button onClick={openNew}>
             <Plus className="h-4 w-4" />
-            Novo lançamento
+            <span className="sm:hidden">Novo</span>
+            <span className="hidden sm:inline">Novo lançamento</span>
           </Button>
         </div>
       </div>

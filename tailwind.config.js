@@ -7,6 +7,12 @@ export default {
   theme: {
     container: { center: true, padding: '1rem' },
     extend: {
+      // Insets de área segura (notch/barra de gestos) p/ PWA standalone.
+      // Habilita utilitários como pb-safe-b, pt-safe-t, h-safe-b.
+      spacing: {
+        'safe-b': 'env(safe-area-inset-bottom)',
+        'safe-t': 'env(safe-area-inset-top)',
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
