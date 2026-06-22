@@ -202,6 +202,11 @@ export const importApi = {
   },
   list: (ws: string) => api.get<{ items: ImportBatch[] }>(wsPath(ws, '/imports')),
   get: (ws: string, id: string) => api.get<{ batch: ImportBatch }>(wsPath(ws, `/imports/${id}`)),
+  // Confirma o upload e dispara a extração com IA (2ª etapa). Com fila (Redis),
+  // responde 202 queued:true e segue em background — acompanhe via `get` até
+  // PENDING_REVIEW/FAILED. Sem fila, já volta com o lote em PENDING_REVIEW.
+  extract: (ws: string, id: string) =>
+    api.post<{ batch: ImportBatch; queued: boolean }>(wsPath(ws, `/imports/${id}/extract`)),
   patchItem: (ws: string, id: string, itemId: string, body: ImportItemPatch) =>
     api.patch<{ item: ImportItem }>(wsPath(ws, `/imports/${id}/items/${itemId}`), body),
   // Quando há fila (Redis), a API responde 202 com queued:true e o processamento

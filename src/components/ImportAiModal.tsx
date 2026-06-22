@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Loader2, Upload, Sparkles, FileText, Check, X, RotateCcw } from 'lucide-react';
+import { Loader2, Upload, Sparkles, FileText, Check, X, RotateCcw, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -27,7 +27,7 @@ import { useLiveAccounts, useLiveCards, useLiveCategories } from '@/hooks/useLiv
 import { useSync } from '@/sync/SyncProvider';
 import { importApi } from '@/api/endpoints';
 import { ApiError } from '@/api/client';
-import type { ImportBatch, ImportItem } from '@/api/types';
+import type { ImportBatch, ImportItem, ImportSource } from '@/api/types';
 
 interface Props {
   opened: boolean;
@@ -35,7 +35,29 @@ interface Props {
   workspaceId: string;
 }
 
-type Phase = 'idle' | 'processing' | 'review';
+// idle: escolha de conta/arquivo · uploading: enviando o doc · uploaded: dados
+// do doc + "Continuar" · extracting: lendo com IA · review: revisão dos itens.
+type Phase = 'idle' | 'uploading' | 'uploaded' | 'extracting' | 'review';
+
+const SOURCE_LABEL: Record<ImportSource, string> = {
+  PDF: 'PDF',
+  IMAGE: 'Imagem',
+  CSV: 'CSV',
+  OFX: 'OFX',
+};
+
+/** Formata bytes em unidade legível (ex.: "1.4 MB"). */
+function formatBytes(bytes?: number | null): string {
+  if (!bytes || bytes <= 0) return '—';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let v = bytes;
+  let u = 0;
+  while (v >= 1024 && u < units.length - 1) {
+    v /= 1024;
+    u += 1;
+  }
+  return `${v.toFixed(u > 0 && v < 10 ? 1 : 0)} ${units[u]}`;
+}
 
 /** Linha editável na revisão (espelha um ImportItem + estado local). */
 interface Row {
@@ -83,6 +105,24 @@ async function waitForImport(workspaceId: string, batchId: string): Promise<numb
   throw new Error('A importação ainda está em andamento. Confira o extrato em instantes.');
 }
 
+/**
+ * Acompanha a extração processada em background (fila). Faz polling do lote até
+ * PENDING_REVIEW (devolve o lote com os itens) ou FAILED (lança com a mensagem).
+ * Desiste após ~2min para não travar a UI caso o worker esteja indisponível.
+ */
+async function waitForExtraction(workspaceId: string, batchId: string): Promise<ImportBatch> {
+  const maxAttempts = 80; // ~2min a 1,5s por tentativa
+  for (let i = 0; i < maxAttempts; i++) {
+    await sleep(1500);
+    const { batch } = await importApi.get(workspaceId, batchId);
+    if (batch.status === 'PENDING_REVIEW') return batch;
+    if (batch.status === 'FAILED') {
+      throw new Error(batch.error ?? 'Falha ao ler o documento.');
+    }
+  }
+  throw new Error('A leitura do documento ainda está em andamento. Tente novamente em instantes.');
+}
+
 function itemToRow(it: ImportItem, fallbackSource: string): Row {
   return {
     id: it.id,
@@ -113,6 +153,7 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
   const [batch, setBatch] = useState<ImportBatch | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [confirming, setConfirming] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const patchRow = (id: string, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -121,6 +162,7 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
     setPhase('idle');
     setBatch(null);
     setRows([]);
+    setDragOver(false);
     if (fileInput.current) fileInput.current.value = '';
   };
 
@@ -129,25 +171,66 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
     onClose();
   };
 
+  // Mostra a tela de revisão a partir de um lote já extraído.
+  const goToReview = (b: ImportBatch) => {
+    setBatch(b);
+    setRows((b.items ?? []).map((it) => itemToRow(it, source)));
+    if (b.items && b.items.length > 0) {
+      setPhase('review');
+    } else {
+      setPhase('uploaded');
+      toast.error('Nenhuma transação foi reconhecida no documento.');
+    }
+  };
+
+  // Etapa 1: envia o documento (sem IA ainda). Em UPLOADED, mostra os dados do
+  // doc e aguarda o "Continuar"; sem storage o backend já extrai inline e volta
+  // PENDING_REVIEW, então pulamos direto para a revisão.
   const onFile = async (file: File) => {
     if (!source) {
       toast.error('Escolha a conta ou o cartão de destino antes de enviar o documento.');
       return;
     }
-    setPhase('processing');
+    setPhase('uploading');
     try {
       const { batch: b } = await importApi.upload(workspaceId, file, decodeSource(source));
       setBatch(b);
-      setRows((b.items ?? []).map((it) => itemToRow(it, source)));
-      setPhase(b.items && b.items.length > 0 ? 'review' : 'idle');
-      if (!b.items || b.items.length === 0) {
-        toast.error('Nenhuma transação foi reconhecida no documento.');
+      if (b.status === 'UPLOADED') {
+        setPhase('uploaded');
+      } else {
+        goToReview(b);
       }
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Falha ao processar o documento.';
+      const msg = err instanceof ApiError ? err.message : 'Falha ao enviar o documento.';
       toast.error(msg);
       reset();
     }
+  };
+
+  // Etapa 2: confirma e dispara a leitura com IA. Com fila (Redis), acompanha o
+  // processamento em background por polling; sem fila, o lote já volta extraído.
+  const continueExtraction = async () => {
+    if (!batch) return;
+    setPhase('extracting');
+    try {
+      const res = await importApi.extract(workspaceId, batch.id);
+      const extracted = res.queued ? await waitForExtraction(workspaceId, batch.id) : res.batch;
+      goToReview(extracted);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Falha ao ler o documento.';
+      toast.error(msg);
+      // O lote fica FAILED (reprocessável): volta à tela de confirmação p/ tentar
+      // de novo ou recomeçar.
+      setPhase('uploaded');
+    }
+  };
+
+  // Drag-and-drop na área de upload (etapa idle).
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) void onFile(f);
   };
 
   const confirm = async () => {
@@ -214,26 +297,28 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
 
         {phase !== 'review' && (
           <Card className="space-y-4 p-4">
-            <div className="space-y-1.5">
-              <Label>Conta ou cartão de destino</Label>
-              <Select value={source} onValueChange={setSource}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a conta ou o cartão" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((a) => (
-                    <SelectItem key={`acc-${a.key}`} value={accVal(a.key)}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                  {cards.map((c) => (
-                    <SelectItem key={`card-${c.key}`} value={cardVal(c.key)}>
-                      {c.name} (cartão)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {phase === 'idle' && (
+              <div className="space-y-1.5">
+                <Label>Conta ou cartão de destino</Label>
+                <Select value={source} onValueChange={setSource}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a conta ou o cartão" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((a) => (
+                      <SelectItem key={`acc-${a.key}`} value={accVal(a.key)}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                    {cards.map((c) => (
+                      <SelectItem key={`card-${c.key}`} value={cardVal(c.key)}>
+                        {c.name} (cartão)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <input
               ref={fileInput}
@@ -246,21 +331,73 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
               }}
             />
 
-            {phase === 'processing' ? (
-              <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm">Lendo o documento e extraindo os lançamentos…</p>
-              </div>
-            ) : (
+            {phase === 'idle' && (
               <button
                 type="button"
                 onClick={() => fileInput.current?.click()}
-                className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border p-10 text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                className={`flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed p-10 transition-colors ${
+                  dragOver
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-border text-muted-foreground hover:border-primary hover:text-primary'
+                }`}
               >
                 <Upload className="h-8 w-8" />
-                <span className="text-sm font-medium">Clique para escolher um documento</span>
+                <span className="text-sm font-medium">
+                  Arraste um documento aqui ou clique para escolher
+                </span>
                 <span className="text-xs">PDF · Imagem · CSV · OFX</span>
               </button>
+            )}
+
+            {phase === 'uploading' && (
+              <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
+                <Upload className="h-8 w-8 animate-pulse text-primary" />
+                <p className="text-sm">Enviando o documento…</p>
+              </div>
+            )}
+
+            {(phase === 'uploaded' || phase === 'extracting') && batch && (
+              <div className="space-y-4">
+                {/* Dados do documento enviado */}
+                <div className="flex items-start gap-3 rounded-lg border border-border p-3">
+                  <FileText className="mt-0.5 h-8 w-8 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="truncate text-sm font-medium">{batch.filename ?? 'documento'}</p>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      <Badge variant="muted">{SOURCE_LABEL[batch.source]}</Badge>
+                      <span>{formatBytes(batch.fileSize)}</span>
+                      {batch.pageCount ? <span>· {batch.pageCount} página(s)</span> : null}
+                    </div>
+                  </div>
+                </div>
+
+                {phase === 'extracting' ? (
+                  <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm">Lendo o documento e extraindo os lançamentos…</p>
+                    <p className="text-xs">
+                      Documentos grandes podem levar alguns instantes — pode acompanhar por aqui.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <Button variant="ghost" size="sm" onClick={reset}>
+                      <RotateCcw className="h-4 w-4" />
+                      Trocar arquivo
+                    </Button>
+                    <Button onClick={() => void continueExtraction()}>
+                      Continuar
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
           </Card>
         )}

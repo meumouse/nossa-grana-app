@@ -482,6 +482,7 @@ export interface InvestmentTransaction {
 // ---- Importação por LLM ----
 export type ImportSource = 'PDF' | 'IMAGE' | 'CSV' | 'OFX';
 export type ImportStatus =
+  | 'UPLOADED'
   | 'PROCESSING'
   | 'PENDING_REVIEW'
   | 'IMPORTING'
@@ -516,6 +517,8 @@ export interface ImportBatch {
   status: ImportStatus;
   filename: string | null;
   mimeType: string | null;
+  fileSize: number | null;
+  pageCount: number | null;
   model: string | null;
   error: string | null;
   createdAt: string;
