@@ -521,6 +521,9 @@ export interface ImportBatch {
   pageCount: number | null;
   model: string | null;
   error: string | null;
+  // Progresso do fracionamento durante a extração (docs grandes lidos em chunks).
+  chunkTotal?: number | null;
+  chunkDone?: number | null;
   createdAt: string;
   updatedAt: string;
   items?: ImportItem[];

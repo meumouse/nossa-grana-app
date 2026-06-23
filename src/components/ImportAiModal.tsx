@@ -114,11 +114,19 @@ async function waitForImport(workspaceId: string, batchId: string): Promise<numb
  * PENDING_REVIEW (devolve o lote com os itens) ou FAILED (lança com a mensagem).
  * Desiste após ~2min para não travar a UI caso o worker esteja indisponível.
  */
-async function waitForExtraction(workspaceId: string, batchId: string): Promise<ImportBatch> {
+async function waitForExtraction(
+  workspaceId: string,
+  batchId: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<ImportBatch> {
   const maxAttempts = 200; // ~5min a 1,5s por tentativa (docs pesados demoram mais)
   for (let i = 0; i < maxAttempts; i++) {
     await sleep(1500);
     const { batch } = await importApi.get(workspaceId, batchId);
+    // Progresso do fracionamento (docs grandes lidos em chunks), quando houver.
+    if (batch.chunkTotal && batch.chunkTotal > 1) {
+      onProgress?.(batch.chunkDone ?? 0, batch.chunkTotal);
+    }
     if (batch.status === 'PENDING_REVIEW') return batch;
     if (batch.status === 'FAILED') {
       throw new Error(batch.error ?? 'Falha ao ler o documento.');
@@ -164,6 +172,8 @@ export function ImportAiModal({
   const [rows, setRows] = useState<Row[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  // Progresso do fracionamento na extração ("lendo parte X de Y"). null = sem chunks.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const patchRow = (id: string, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -173,6 +183,7 @@ export function ImportAiModal({
     setBatch(null);
     setRows([]);
     setDragOver(false);
+    setProgress(null);
     if (fileInput.current) fileInput.current.value = '';
   };
 
@@ -227,7 +238,7 @@ export function ImportAiModal({
       setPhase('uploaded');
     } else {
       setPhase('extracting');
-      waitForExtraction(workspaceId, initialBatch.id)
+      waitForExtraction(workspaceId, initialBatch.id, (done, total) => setProgress({ done, total }))
         .then(showReview)
         .catch((err) => {
           toast.error(err instanceof Error ? err.message : 'Falha ao ler o documento.');
@@ -264,10 +275,13 @@ export function ImportAiModal({
   // processamento em background por polling; sem fila, o lote já volta extraído.
   const continueExtraction = async () => {
     if (!batch) return;
+    setProgress(null);
     setPhase('extracting');
     try {
       const res = await importApi.extract(workspaceId, batch.id);
-      const extracted = res.queued ? await waitForExtraction(workspaceId, batch.id) : res.batch;
+      const extracted = res.queued
+        ? await waitForExtraction(workspaceId, batch.id, (done, total) => setProgress({ done, total }))
+        : res.batch;
       goToReview(extracted);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Falha ao ler o documento.';
@@ -434,9 +448,28 @@ export function ImportAiModal({
                   <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     <p className="text-sm">Lendo o documento e extraindo os lançamentos…</p>
-                    <p className="text-xs">
-                      Documentos grandes podem levar alguns instantes — pode acompanhar por aqui.
-                    </p>
+                    {progress && progress.total > 1 ? (
+                      <div className="w-full max-w-xs space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span>Documento grande — lendo em partes</span>
+                          <span className="font-medium text-foreground">
+                            {progress.done}/{progress.total}
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all"
+                            style={{
+                              width: `${Math.round((progress.done / progress.total) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs">
+                        Documentos grandes podem levar alguns instantes — pode acompanhar por aqui.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-between gap-2">
