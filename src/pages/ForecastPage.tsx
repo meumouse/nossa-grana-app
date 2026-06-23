@@ -107,7 +107,7 @@ export function ForecastPage() {
 
       <Card>
         <CardContent className="p-0">
-          <Table>
+          <Table className="whitespace-nowrap">
             <TableHeader>
               <TableRow>
                 <TableHead>Mês</TableHead>

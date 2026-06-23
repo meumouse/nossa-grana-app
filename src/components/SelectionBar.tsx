@@ -50,7 +50,7 @@ export function SelectionBar({
             {allSelected ? 'Limpar' : 'Selecionar tudo'}
           </Button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Button variant="ghost" onClick={onCancel}>
             <X className="h-4 w-4" />
             Cancelar

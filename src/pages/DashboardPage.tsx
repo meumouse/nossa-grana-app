@@ -274,7 +274,7 @@ export function DashboardPage() {
       </div>
 
       {/* Hero de saldo + ações + mini-stats + ações rápidas */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Card hero (saldo consolidado) */}
         <Card className="border-transparent bg-gradient-to-br from-primary to-primary/75 text-primary-foreground shadow-md lg:col-span-2">
           <CardContent className="p-5 sm:p-6">
@@ -400,7 +400,7 @@ export function DashboardPage() {
       )}
 
       {/* Gráfico + donut */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-base">Visão do orçamento</CardTitle>
@@ -515,7 +515,7 @@ export function DashboardPage() {
       </div>
 
       {/* Atividade + contas */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Últimos lançamentos</CardTitle>

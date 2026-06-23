@@ -262,7 +262,7 @@ export function SettingsPage() {
           <p className="py-4 text-sm text-destructive">Não foi possível carregar as configurações.</p>
         ) : (
           <form onSubmit={onSubmitGeneral} className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="baseCurrency">Moeda base</Label>
                 <Select value={baseCurrency} onValueChange={setBaseCurrency} disabled={!canEdit}>
