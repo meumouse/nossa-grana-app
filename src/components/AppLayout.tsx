@@ -11,6 +11,7 @@ import {
   Receipt,
   TrendingUp,
   LineChart,
+  FileText,
   Settings,
   Users,
   UserRound,
@@ -87,6 +88,7 @@ function ThemeRow() {
 export const LINKS = [
   { to: '/', label: 'Início', icon: LayoutDashboard },
   { to: '/transactions', label: 'Extrato', icon: ArrowLeftRight },
+  { to: '/documentos', label: 'Documentos', icon: FileText },
   { to: '/accounts', label: 'Contas', icon: Wallet },
   { to: '/cards', label: 'Cartões', icon: CreditCard },
   { to: '/payables', label: 'A pagar/receber', icon: CalendarClock },

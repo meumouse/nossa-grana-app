@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Upload, Sparkles, FileText, Check, X, RotateCcw, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -33,6 +33,10 @@ interface Props {
   opened: boolean;
   onClose: () => void;
   workspaceId: string;
+  // Modo "documento existente": começa de um lote já criado (via documentApi.import),
+  // pulando a fase de upload. `initialSource` é o destino padrão ("acc:<id>"/"card:<id>").
+  initialBatch?: ImportBatch | null;
+  initialSource?: string;
 }
 
 // idle: escolha de conta/arquivo · uploading: enviando o doc · uploaded: dados
@@ -140,7 +144,13 @@ function itemToRow(it: ImportItem, fallbackSource: string): Row {
   };
 }
 
-export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
+export function ImportAiModal({
+  opened,
+  onClose,
+  workspaceId,
+  initialBatch,
+  initialSource,
+}: Props) {
   const { syncNow } = useSync();
   const accounts = useLiveAccounts(workspaceId) ?? [];
   const cards = useLiveCards(workspaceId) ?? [];
@@ -182,6 +192,49 @@ export function ImportAiModal({ opened, onClose, workspaceId }: Props) {
       toast.error('Nenhuma transação foi reconhecida no documento.');
     }
   };
+
+  // Modo "documento existente": ao abrir com um lote já criado (Documentos →
+  // Importar com IA), pula o upload e acompanha a extração / cai na revisão.
+  // O ref evita reiniciar o polling a cada re-render do mesmo lote.
+  const startedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!opened) {
+      startedRef.current = null;
+      return;
+    }
+    if (!initialBatch || startedRef.current === initialBatch.id) return;
+    startedRef.current = initialBatch.id;
+
+    const fallback = initialSource ?? '';
+    setSource(fallback);
+    setBatch(initialBatch);
+
+    const showReview = (b: ImportBatch) => {
+      setBatch(b);
+      setRows((b.items ?? []).map((it) => itemToRow(it, fallback)));
+      if (b.items && b.items.length > 0) {
+        setPhase('review');
+      } else {
+        setPhase('uploaded');
+        toast.error('Nenhuma transação foi reconhecida no documento.');
+      }
+    };
+
+    if (initialBatch.status === 'PENDING_REVIEW') {
+      showReview(initialBatch);
+    } else if (initialBatch.status === 'FAILED') {
+      toast.error(initialBatch.error ?? 'Falha ao ler o documento.');
+      setPhase('uploaded');
+    } else {
+      setPhase('extracting');
+      waitForExtraction(workspaceId, initialBatch.id)
+        .then(showReview)
+        .catch((err) => {
+          toast.error(err instanceof Error ? err.message : 'Falha ao ler o documento.');
+          setPhase('uploaded');
+        });
+    }
+  }, [opened, initialBatch, initialSource, workspaceId]);
 
   // Etapa 1: envia o documento (sem IA ainda). Em UPLOADED, mostra os dados do
   // doc e aguarda o "Continuar"; sem storage o backend já extrai inline e volta

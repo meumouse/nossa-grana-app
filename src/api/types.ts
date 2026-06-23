@@ -525,4 +525,27 @@ export interface ImportBatch {
   updatedAt: string;
   items?: ImportItem[];
   _count?: { items: number };
+  documentId?: string | null;
+}
+
+/** Resumo de um lote gerado a partir do documento (mostrado na lista). */
+export interface DocumentBatchRef {
+  id: string;
+  status: ImportStatus;
+  createdAt: string;
+}
+
+/** Documento persistido no storage (upload direto + os vindos do Extrato). */
+export interface DocumentFile {
+  id: string;
+  workspaceId: string;
+  createdById: string | null;
+  filename: string;
+  mimeType: string;
+  fileSize: number;
+  source: ImportSource;
+  pageCount: number | null;
+  createdAt: string;
+  updatedAt: string;
+  importBatches?: DocumentBatchRef[];
 }

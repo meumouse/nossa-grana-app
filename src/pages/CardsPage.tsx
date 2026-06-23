@@ -168,7 +168,7 @@ export function CardsPage() {
               <Card key={c.key} className="flex items-center justify-between gap-2 p-3">
                 <div className="flex min-w-0 items-center gap-3">
                   {inst ? (
-                    <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} size={36} />
+                    <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} logoUrl={inst.logoUrl} size={36} />
                   ) : null}
                   <div className="min-w-0">
                     <p className="font-medium">{c.name}</p>
@@ -248,7 +248,7 @@ export function CardsPage() {
                   {institutions.map((inst) => (
                     <SelectItem key={inst.id} value={inst.id}>
                       <span className="flex items-center gap-2">
-                        <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} size={20} />
+                        <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} logoUrl={inst.logoUrl} size={20} />
                         {inst.shortName || inst.name}
                       </span>
                     </SelectItem>

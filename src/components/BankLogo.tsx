@@ -19,6 +19,15 @@ const BANK_ICONS: Record<string, SimpleIcon> = {
   binance: siBinance,
 };
 
+// Logos não cobertos pelo simple-icons: monograma desenhado à mão (path branco
+// sobre a cor da marca). `hex` é a cor de fundo padrão da marca.
+const CUSTOM_ICONS: Record<string, { path: string; hex: string }> = {
+  // Havan — monograma "H" (a marca não está no simple-icons).
+  havan: { path: 'M5 4h4v6h6V4h4v16h-4v-6H9v6H5z', hex: '003da5' },
+};
+
+type GlyphIcon = { path: string; hex: string };
+
 const COMBINING = /[̀-ͯ]/g;
 const normalize = (s: string): string =>
   s
@@ -27,8 +36,11 @@ const normalize = (s: string): string =>
     .replace(COMBINING, '')
     .trim();
 
-function iconFor(name: string): SimpleIcon | undefined {
-  return BANK_ICONS[normalize(name)];
+function iconFor(name: string): GlyphIcon | undefined {
+  const n = normalize(name);
+  const si = BANK_ICONS[n];
+  if (si) return { path: si.path, hex: si.hex };
+  return CUSTOM_ICONS[n];
 }
 
 /** Iniciais p/ o fallback (até 2 letras significativas). */
@@ -42,14 +54,31 @@ function initials(name: string): string {
 export interface BankLogoProps {
   name: string;
   brandColor?: string | null;
+  /** Logo enviado pelo usuário (instituição custom). Tem prioridade sobre o ícone. */
+  logoUrl?: string | null;
   /** Diâmetro em px. Padrão 32. */
   size?: number;
   className?: string;
 }
 
-export function BankLogo({ name, brandColor, size = 32, className }: BankLogoProps) {
+export function BankLogo({ name, brandColor, logoUrl, size = 32, className }: BankLogoProps) {
   const icon = iconFor(name);
   const bg = brandColor || (icon ? `#${icon.hex}` : '#64748b');
+
+  // Logo enviado: renderiza a imagem cobrindo o badge redondo.
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={name}
+        title={name}
+        width={size}
+        height={size}
+        className={cn('inline-block shrink-0 rounded-full object-cover', className)}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
 
   return (
     <span

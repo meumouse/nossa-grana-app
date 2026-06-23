@@ -202,7 +202,7 @@ export function AccountsPage() {
                 {(() => {
                   const inst = a.institutionId ? instById.get(a.institutionId) : null;
                   return inst ? (
-                    <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} size={40} />
+                    <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} logoUrl={inst.logoUrl} size={40} />
                   ) : (
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                       <Wallet className="h-5 w-5" />
@@ -295,7 +295,7 @@ export function AccountsPage() {
                   {institutions.map((inst) => (
                     <SelectItem key={inst.id} value={inst.id}>
                       <span className="flex items-center gap-2">
-                        <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} size={20} />
+                        <BankLogo name={inst.shortName || inst.name} brandColor={inst.brandColor} logoUrl={inst.logoUrl} size={20} />
                         {inst.shortName || inst.name}
                       </span>
                     </SelectItem>

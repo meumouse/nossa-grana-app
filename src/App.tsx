@@ -16,6 +16,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { AccountsPage } from './pages/AccountsPage';
 import { CardsPage } from './pages/CardsPage';
 import { TransactionsPage } from './pages/TransactionsPage';
+import { DocumentosPage } from './pages/DocumentosPage';
 import { PayablesPage } from './pages/PayablesPage';
 import { BudgetsPage } from './pages/BudgetsPage';
 import { RecurringPage } from './pages/RecurringPage';
@@ -75,6 +76,7 @@ function AppRoutes() {
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/cards" element={<CardsPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/documentos" element={<DocumentosPage />} />
         <Route path="/payables" element={<PayablesPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/recurring" element={<RecurringPage />} />

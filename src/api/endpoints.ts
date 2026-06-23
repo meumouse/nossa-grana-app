@@ -12,6 +12,7 @@ import type {
   CreditCard,
   CreditCardInvoice,
   DashboardSummary,
+  DocumentFile,
   Forecast,
   ImportBatch,
   ImportItem,
@@ -101,8 +102,26 @@ export const cardApi = {
 };
 
 // ---- Institutions / bancos (online, catálogo) ----
+export interface InstitutionInput {
+  name: string;
+  shortName?: string;
+  brandColor?: string;
+  logoUrl?: string; // chave do storage devolvida por uploadLogo OU URL externa
+}
+
 export const institutionApi = {
   list: (ws: string) => api.get<{ institutions: Institution[] }>(wsPath(ws, '/institutions')),
+  create: (ws: string, body: InstitutionInput) =>
+    api.post<{ institution: Institution }>(wsPath(ws, '/institutions'), body),
+  update: (ws: string, id: string, body: Partial<InstitutionInput>) =>
+    api.patch<{ institution: Institution }>(wsPath(ws, `/institutions/${id}`), body),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/institutions/${id}`)),
+  // Sobe o logo ao storage; devolve { key, url }. Salve `key` em logoUrl no create/update.
+  uploadLogo: (ws: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.postForm<{ key: string; url: string }>(wsPath(ws, '/institutions/logo'), form);
+  },
 };
 
 // ---- Categories (online) ----
@@ -218,6 +237,26 @@ export const importApi = {
       { defaultAccountId: owner.accountId, defaultCreditCardId: owner.creditCardId },
     ),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/imports/${id}`)),
+};
+
+// ---- Documentos (online, persistidos no storage S3) ----
+export const documentApi = {
+  upload: (ws: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.postForm<{ document: DocumentFile }>(wsPath(ws, '/documents'), form);
+  },
+  list: (ws: string) => api.get<{ items: DocumentFile[] }>(wsPath(ws, '/documents')),
+  fileUrl: (ws: string, id: string) =>
+    api.get<{ url: string }>(wsPath(ws, `/documents/${id}/file`)),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/documents/${id}`)),
+  // (Re)importa o documento com IA: cria um ImportBatch e dispara a extração.
+  // Com fila (Redis) responde 202 queued:true e segue em background.
+  import: (ws: string, id: string, owner: ImportOwner = {}) =>
+    api.post<{ batch: ImportBatch; queued: boolean }>(wsPath(ws, `/documents/${id}/import`), {
+      accountId: owner.accountId,
+      creditCardId: owner.creditCardId,
+    }),
 };
 
 // ---- Orçamentos (online) ----
