@@ -1,5 +1,5 @@
 import { db } from '../db/dexie';
-import { institutionApi, syncApi } from '../api/endpoints';
+import { institutionApi, syncApi, tagApi } from '../api/endpoints';
 import type { Account, Category, CreditCard, Transaction } from '../api/types';
 
 const META_PULL = (ws: string) => `pull:${ws}`;
@@ -63,6 +63,7 @@ async function pushOutbox(ws: string): Promise<number> {
         shared: row.shared ?? false,
         shareCount: row.shareCount ?? null,
         shares: row.shares ?? null,
+        tagIds: row.tagIds ?? [],
       },
     });
   }
@@ -192,6 +193,7 @@ async function putTransaction(t: Transaction): Promise<void> {
     shared: t.shared ?? false,
     shareCount: t.shareCount ?? null,
     shares: t.shares ?? null,
+    tagIds: (t.tags ?? []).map((x) => x.id),
     updatedAt: t.updatedAt,
     deletedAt: t.deletedAt,
   });
@@ -243,11 +245,36 @@ async function refreshInstitutions(ws: string): Promise<void> {
   }
 }
 
-/** Sincronização completa: envia o outbox, puxa o delta e atualiza bancos. */
+/**
+ * Atualiza o catálogo de tags cacheado p/ render offline. Substitui o conjunto
+ * do workspace a cada sync (tags são geridas online). Best-effort: falha aqui
+ * não interrompe a sincronização principal.
+ */
+async function refreshTags(ws: string): Promise<void> {
+  try {
+    const { tags } = await tagApi.list(ws);
+    await db.transaction('rw', db.tags, async () => {
+      await db.tags.where('workspaceId').equals(ws).delete();
+      await db.tags.bulkPut(
+        tags.map((t) => ({
+          id: t.id,
+          workspaceId: t.workspaceId,
+          name: t.name,
+          color: t.color,
+        })),
+      );
+    });
+  } catch {
+    // offline ou falha de rede: mantém o cache anterior.
+  }
+}
+
+/** Sincronização completa: envia o outbox, puxa o delta e atualiza bancos/tags. */
 export async function runSync(ws: string): Promise<{ pushed: number; pulled: number }> {
   const pushed = await pushOutbox(ws);
   const pulled = await pullDelta(ws);
   await refreshInstitutions(ws);
+  await refreshTags(ws);
   return { pushed, pulled };
 }
 

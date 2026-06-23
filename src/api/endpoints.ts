@@ -33,6 +33,7 @@ import type {
   RecurrenceFrequency,
   RecurringSuggestion,
   RecurringTransaction,
+  Tag,
   Transaction,
   TxShare,
   User,
@@ -134,6 +135,16 @@ export const categoryApi = {
   update: (ws: string, id: string, body: Partial<Category>) =>
     api.patch<{ category: Category }>(wsPath(ws, `/categories/${id}`), body),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/categories/${id}`)),
+};
+
+// ---- Tags (online; cacheadas offline p/ leitura) ----
+export const tagApi = {
+  list: (ws: string) => api.get<{ tags: Tag[] }>(wsPath(ws, '/tags')),
+  create: (ws: string, body: { name: string; color?: string }) =>
+    api.post<{ tag: Tag }>(wsPath(ws, '/tags'), body),
+  update: (ws: string, id: string, body: { name?: string; color?: string }) =>
+    api.patch<{ tag: Tag }>(wsPath(ws, `/tags/${id}`), body),
+  remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/tags/${id}`)),
 };
 
 // ---- Verificação de inconsistências com IA (online) ----

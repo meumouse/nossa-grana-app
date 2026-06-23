@@ -100,6 +100,18 @@ export interface LocalCategory {
   deletedAt: string | null;
 }
 
+/**
+ * Tag cacheada localmente p/ render offline. Geridas ONLINE (criar/editar exige
+ * rede); o cache é substituído a cada sync (engine.refreshTags). Por isso guarda
+ * o `id` do servidor direto como chave — não tem `key`/`clientId` local.
+ */
+export interface LocalTag {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: string | null;
+}
+
 export interface LocalTransaction {
   key: string;
   id: string | null;
@@ -129,6 +141,8 @@ export interface LocalTransaction {
   shared?: boolean;
   shareCount?: number | null;
   shares?: TxShare[] | null;
+  // Tags vinculadas (ids do servidor — tags são geridas online).
+  tagIds?: string[];
   updatedAt: string;
   deletedAt: string | null;
 }
@@ -156,6 +170,7 @@ class NossaGranaDB extends Dexie {
   categories!: Table<LocalCategory, string>;
   transactions!: Table<LocalTransaction, string>;
   institutions!: Table<LocalInstitution, string>;
+  tags!: Table<LocalTag, string>;
   outbox!: Table<OutboxItem, number>;
   meta!: Table<MetaRow, string>;
 
@@ -182,6 +197,11 @@ class NossaGranaDB extends Dexie {
     // Campos de duplicidade/compartilhamento (duplicateDismissed, shared,
     // shareCount, shares) NÃO precisam de migração: Dexie é schemaless fora dos
     // índices e nenhum deles é indexado (boolean não é chave válida no IndexedDB).
+    // v4: catálogo de tags cacheado p/ render offline (gerido online, como bancos).
+    // `tagIds` na transação não é indexado (array) → sem migração de dados.
+    this.version(4).stores({
+      tags: 'id, workspaceId',
+    });
   }
 }
 

@@ -255,6 +255,16 @@ export interface Transaction {
   category?: Pick<Category, 'id' | 'name' | 'color' | 'icon' | 'nature' | 'kind'> | null;
   account?: Pick<Account, 'id' | 'name' | 'type'> | null;
   creditCard?: Pick<CreditCard, 'id' | 'name'> | null;
+  // Tags vinculadas (o pull traz só o id; o catálogo completo vem do tagApi).
+  tags?: { id: string }[];
+}
+
+/** Etiqueta para organizar lançamentos (gerida online; cacheada offline). */
+export interface Tag {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: string | null;
 }
 
 // ---- Verificação de inconsistências (IA) ----

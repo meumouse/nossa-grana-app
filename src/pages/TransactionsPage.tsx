@@ -47,7 +47,7 @@ import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
 import { useAuth } from '@/auth/AuthProvider';
-import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTransactions } from '@/hooks/useLiveData';
+import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTags, useLiveTransactions } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
 import {
@@ -59,6 +59,7 @@ import {
 import { memberApi, workspaceApi } from '@/api/endpoints';
 import { detectDuplicates, redundantDuplicates } from '@/lib/duplicates';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
+import { TagPicker } from '@/components/TagPicker';
 import { ImportAiModal } from '@/components/ImportAiModal';
 import { ShareTransactionModal } from '@/components/ShareTransactionModal';
 import { ConsistencyCheckModal } from '@/components/ConsistencyCheckModal';
@@ -87,6 +88,7 @@ export function TransactionsPage() {
   const accounts = useLiveAccounts(activeId) ?? [];
   const cards = useLiveCards(activeId) ?? [];
   const categories = useLiveCategories(activeId) ?? [];
+  const tags = useLiveTags(activeId) ?? [];
   const { hidden } = usePrivacy();
   const { syncNow } = useSync();
   const [filter, setFilter] = useState<StatusFilter>('ALL');
@@ -97,6 +99,7 @@ export function TransactionsPage() {
   const [accountFilter, setAccountFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [range, setRange] = useState<DateRange | undefined>(undefined);
 
   const [opened, setOpened] = useState(false);
@@ -164,6 +167,7 @@ export function TransactionsPage() {
     [accounts, cards],
   );
   const catMap = useMemo(() => new Map(categories.map((c) => [c.key, c])), [categories]);
+  const tagMap = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
   // Resolve a key local → id do servidor (recorrência é online, usa ids reais).
   const accIdMap = useMemo(() => new Map(accounts.map((a) => [a.key, a.id ?? a.key])), [accounts]);
   const catIdMap = useMemo(() => new Map(categories.map((c) => [c.key, c.id ?? c.key])), [categories]);
@@ -178,6 +182,7 @@ export function TransactionsPage() {
     (accountFilter !== 'ALL' ? 1 : 0) +
     (categoryFilter !== 'ALL' ? 1 : 0) +
     (typeFilter !== 'ALL' ? 1 : 0) +
+    (tagFilter.length > 0 ? 1 : 0) +
     (range?.from || range?.to ? 1 : 0);
 
   const filtersActive = search.trim() !== '' || filterCount > 0;
@@ -190,18 +195,19 @@ export function TransactionsPage() {
       if (accountFilter !== 'ALL' && t.accountId !== accountFilter) return false;
       if (categoryFilter !== 'ALL' && (t.categoryId ?? '') !== categoryFilter) return false;
       if (typeFilter !== 'ALL' && t.type !== typeFilter) return false;
+      if (tagFilter.length > 0 && !(t.tagIds ?? []).some((id) => tagFilter.includes(id))) return false;
       if (q && !`${t.description} ${t.notes ?? ''}`.toLowerCase().includes(q)) return false;
       const day = t.date.slice(0, 10);
       if (fromStr && day < fromStr) return false;
       if (toStr && day > toStr) return false;
       return true;
     });
-  }, [txs, search, accountFilter, categoryFilter, typeFilter, range]);
+  }, [txs, search, accountFilter, categoryFilter, typeFilter, tagFilter, range]);
 
   // Paginação "carregar mais" sobre o extrato já filtrado. Volta à 1ª página
   // quando filtros, busca ou aba de status mudam.
   const paged = usePagedList(visible, {
-    resetKey: `${filter}|${search}|${accountFilter}|${categoryFilter}|${typeFilter}|${range?.from?.toISOString() ?? ''}|${range?.to?.toISOString() ?? ''}`,
+    resetKey: `${filter}|${search}|${accountFilter}|${categoryFilter}|${typeFilter}|${tagFilter.join(',')}|${range?.from?.toISOString() ?? ''}|${range?.to?.toISOString() ?? ''}`,
   });
 
   const clearFilters = () => {
@@ -209,6 +215,7 @@ export function TransactionsPage() {
     setAccountFilter('ALL');
     setCategoryFilter('ALL');
     setTypeFilter('ALL');
+    setTagFilter([]);
     setRange(undefined);
   };
 
@@ -463,6 +470,11 @@ export function TransactionsPage() {
                 </SelectContent>
               </Select>
             </FilterField>
+            {activeId && tags.length > 0 && (
+              <FilterField label="Tags">
+                <TagPicker workspaceId={activeId} tags={tags} value={tagFilter} onChange={setTagFilter} />
+              </FilterField>
+            )}
           </FiltersSheet>
         </div>
         {filtersActive && (
@@ -558,6 +570,23 @@ export function TransactionsPage() {
                       {cat ? ` · ${cat.name}` : ''}
                       {t.shared ? ` · ${paidCount}/${peopleCount} pagaram` : ''}
                     </p>
+                    {(t.tagIds?.length ?? 0) > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {t.tagIds!.map((id) => {
+                          const tag = tagMap.get(id);
+                          if (!tag) return null;
+                          return (
+                            <span
+                              key={id}
+                              className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none"
+                              style={tag.color ? { borderColor: tag.color, color: tag.color } : undefined}
+                            >
+                              {tag.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </button>
                 {!selectMode && (
@@ -741,6 +770,7 @@ export function TransactionsPage() {
             accounts={accounts}
             cards={cards}
             categories={categories}
+            tags={tags}
             editing={editing}
           />
           <ImportAiModal opened={importOpened} onClose={() => setImportOpened(false)} workspaceId={activeId} />

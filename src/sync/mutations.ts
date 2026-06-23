@@ -17,6 +17,7 @@ export interface TxInput {
   shared?: boolean;
   shareCount?: number | null;
   shares?: TxShare[] | null;
+  tagIds?: string[];
 }
 
 /** Enfileira uma mudança no outbox, colapsando upserts repetidos do mesmo item. */
@@ -55,6 +56,7 @@ export async function createTransactionLocal(workspaceId: string, input: TxInput
     shared: input.shared ?? false,
     shareCount: input.shareCount ?? null,
     shares: input.shares ?? null,
+    tagIds: input.tagIds ?? [],
     updatedAt: nowIso(),
     deletedAt: null,
   };
@@ -85,6 +87,7 @@ export async function updateTransactionLocal(key: string, patch: Partial<TxInput
     ...(patch.shared !== undefined ? { shared: patch.shared } : {}),
     ...(patch.shareCount !== undefined ? { shareCount: patch.shareCount ?? null } : {}),
     ...(patch.shares !== undefined ? { shares: patch.shares ?? null } : {}),
+    ...(patch.tagIds !== undefined ? { tagIds: patch.tagIds } : {}),
     updatedAt: nowIso(),
   };
   await db.transaction('rw', db.transactions, db.outbox, async () => {

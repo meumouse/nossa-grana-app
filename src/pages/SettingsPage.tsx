@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
 import { CategoriesSettings } from '@/components/settings/CategoriesSettings';
+import { TagsSettings } from '@/components/settings/TagsSettings';
 import { InstitutionsSettings } from '@/components/settings/InstitutionsSettings';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -493,6 +494,7 @@ export function SettingsPage() {
       </Card>
 
       {activeId && <CategoriesSettings workspaceId={activeId} canEdit={canEdit} />}
+      {activeId && <TagsSettings workspaceId={activeId} canEdit={canEdit} />}
       {activeId && <InstitutionsSettings workspaceId={activeId} canEdit={canEdit} />}
     </div>
   );

@@ -28,7 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
-import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTransactions, useBalances } from '@/hooks/useLiveData';
+import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTags, useLiveTransactions, useBalances } from '@/hooks/useLiveData';
 import { useAuth } from '@/auth/AuthProvider';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
@@ -108,6 +108,7 @@ export function DashboardPage() {
   const accounts = useLiveAccounts(activeId) ?? [];
   const cards = useLiveCards(activeId) ?? [];
   const categories = useLiveCategories(activeId) ?? [];
+  const tags = useLiveTags(activeId) ?? [];
   const balances = useBalances(activeId);
   const txs = useLiveTransactions(activeId) ?? [];
   const { hidden } = usePrivacy();
@@ -598,6 +599,7 @@ export function DashboardPage() {
           accounts={accounts}
           cards={cards}
           categories={categories}
+          tags={tags}
           initialType={txType}
         />
       )}

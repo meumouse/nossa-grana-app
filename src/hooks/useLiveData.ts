@@ -4,6 +4,7 @@ import {
   type LocalAccount,
   type LocalCreditCard,
   type LocalInstitution,
+  type LocalTag,
   type LocalTransaction,
 } from '../db/dexie';
 import { toCents } from '../lib/format';
@@ -69,6 +70,15 @@ export function useLiveCategories(ws: string | null) {
     return rows
       .filter((c) => !c.deletedAt && !c.archived)
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  }, [ws]);
+}
+
+/** Tags do workspace cacheadas (geridas online), ordenadas por nome. */
+export function useLiveTags(ws: string | null): LocalTag[] | undefined {
+  return useLiveQuery(async () => {
+    if (!ws) return [];
+    const rows = await db.tags.where('workspaceId').equals(ws).toArray();
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
   }, [ws]);
 }
 

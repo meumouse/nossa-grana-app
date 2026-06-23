@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -14,7 +15,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/sonner';
-import type { LocalAccount, LocalCreditCard, LocalCategory, LocalTransaction } from '@/db/dexie';
+import { TagPicker } from '@/components/TagPicker';
+import type { LocalAccount, LocalCreditCard, LocalCategory, LocalTag, LocalTransaction } from '@/db/dexie';
 import { createTransactionLocal, updateTransactionLocal } from '@/sync/mutations';
 import { useSync } from '@/sync/SyncProvider';
 
@@ -25,6 +27,7 @@ interface Props {
   accounts: LocalAccount[];
   cards?: LocalCreditCard[];
   categories: LocalCategory[];
+  tags?: LocalTag[];
   editing?: LocalTransaction | null;
   /** Tipo pré-selecionado ao abrir um lançamento novo (ex.: hero do dashboard). */
   initialType?: 'INCOME' | 'EXPENSE';
@@ -50,6 +53,7 @@ export function TransactionFormModal({
   accounts,
   cards = [],
   categories,
+  tags = [],
   editing,
   initialType,
 }: Props) {
@@ -60,6 +64,8 @@ export function TransactionFormModal({
   // Origem: conta ou cartão, codificada em "acc:<key>" / "card:<key>".
   const [source, setSource] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [notes, setNotes] = useState('');
+  const [tagIds, setTagIds] = useState<string[]>([]);
   const [date, setDate] = useState<Date>(new Date());
   const [pending, setPending] = useState(false);
 
@@ -77,6 +83,8 @@ export function TransactionFormModal({
             : '',
       );
       setCategoryId(editing.categoryId ?? '');
+      setNotes(editing.notes ?? '');
+      setTagIds(editing.tagIds ?? []);
       setDate(new Date(editing.date));
       setPending(editing.status === 'PENDING');
     } else {
@@ -85,6 +93,8 @@ export function TransactionFormModal({
       setDescription('');
       setSource(accounts[0] ? accVal(accounts[0].key) : cards[0] ? cardVal(cards[0].key) : '');
       setCategoryId('');
+      setNotes('');
+      setTagIds([]);
       setDate(new Date());
       setPending(false);
     }
@@ -107,6 +117,8 @@ export function TransactionFormModal({
       amount: value,
       description: description.trim(),
       categoryId: categoryId || null,
+      notes: notes.trim() || null,
+      tagIds,
       date: dateToInput(date),
       dueDate: pending ? dateToInput(date) : null,
     };
@@ -187,6 +199,22 @@ export function TransactionFormModal({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Tags</Label>
+            <TagPicker workspaceId={workspaceId} tags={tags} value={tagIds} onChange={setTagIds} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="notes">Observação</Label>
+            <Textarea
+              id="notes"
+              placeholder="Anotações sobre o lançamento (opcional)"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              maxLength={2000}
+            />
           </div>
 
           <div className="space-y-1.5">
