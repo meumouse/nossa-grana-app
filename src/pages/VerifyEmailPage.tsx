@@ -5,12 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { authApi } from '@/api/endpoints';
 import { ApiError } from '@/api/client';
+import { useAuth } from '@/auth/AuthProvider';
 
 type Status = 'verifying' | 'success' | 'error';
 
 export function VerifyEmailPage() {
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
+  const { status: authStatus, updateUser } = useAuth();
   const [status, setStatus] = useState<Status>('verifying');
   const [message, setMessage] = useState('');
   // StrictMode monta duas vezes em dev; o token é uso único, então só uma chamada.
@@ -27,7 +29,18 @@ export function VerifyEmailPage() {
     }
     authApi
       .verifyEmail(token)
-      .then(() => setStatus('success'))
+      .then(async () => {
+        // O backend marcou `emailVerified`, mas o `user` em cache (localStorage)
+        // ainda está defasado. Se estiver logado, re-busca o /me e atualiza o
+        // estado de auth — senão o perfil seguiria mostrando "Não verificado".
+        if (authStatus === 'authed') {
+          await authApi
+            .me()
+            .then(({ user }) => updateUser(user))
+            .catch(() => undefined);
+        }
+        setStatus('success');
+      })
       .catch((err) => {
         setStatus('error');
         setMessage(
