@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckSquare, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { CheckSquare, Loader2, Plus, RefreshCw, Shapes, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { recurringApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
 import { LoadMore } from '@/components/LoadMore';
 import { SelectionBar } from '@/components/SelectionBar';
+import { BulkCategoryDialog } from '@/components/BulkCategoryDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { usePagedList } from '@/hooks/usePagedList';
 import { useSelection } from '@/hooks/useSelection';
@@ -43,6 +44,8 @@ export function RecurringPage() {
   const sel = useSelection();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [bulkCatOpen, setBulkCatOpen] = useState(false);
+  const [bulkCatting, setBulkCatting] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['recurring', activeId],
@@ -71,6 +74,27 @@ export function RecurringPage() {
   const items = data?.items ?? [];
   const paged = usePagedList(items, { resetKey: activeId });
   const allSelected = paged.visible.length > 0 && paged.visible.every((r) => sel.has(r.id));
+
+  const bulkCategory = async (categoryId: string | null) => {
+    setBulkCatting(true);
+    try {
+      await Promise.all(
+        [...sel.selected].map((id) => recurringApi.update(activeId!, id, { categoryId })),
+      );
+      toast.success(
+        sel.count === 1
+          ? 'Categoria alterada em 1 recorrência'
+          : `Categoria alterada em ${sel.count} recorrências`,
+      );
+      setBulkCatOpen(false);
+      sel.exit();
+      invalidate();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setBulkCatting(false);
+    }
+  };
 
   const bulkDelete = async () => {
     setDeleting(true);
@@ -152,12 +176,27 @@ export function RecurringPage() {
           onToggleAll={() => (allSelected ? sel.clear() : sel.setMany(paged.visible.map((r) => r.id)))}
           onCancel={sel.exit}
         >
+          <Button variant="outline" onClick={() => setBulkCatOpen(true)} disabled={sel.count === 0}>
+            <Shapes className="h-4 w-4" />
+            Categoria
+          </Button>
           <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={sel.count === 0}>
             <Trash2 className="h-4 w-4" />
             Excluir
           </Button>
         </SelectionBar>
       )}
+
+      <BulkCategoryDialog
+        open={bulkCatOpen}
+        onOpenChange={setBulkCatOpen}
+        categories={categories}
+        count={sel.count}
+        loading={bulkCatting}
+        getValue={(c) => c.id ?? c.key}
+        onApply={(id) => void bulkCategory(id)}
+        noun={{ one: 'recorrência', many: 'recorrências' }}
+      />
 
       <ConfirmDialog
         open={confirmOpen}

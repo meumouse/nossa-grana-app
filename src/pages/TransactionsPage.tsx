@@ -19,6 +19,8 @@ import {
   ArrowLeftRight,
   ChevronDown,
   Tag as TagIcon,
+  Shapes,
+  CreditCard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -54,6 +56,7 @@ import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
 import {
   bulkAddTagsLocal,
+  bulkSetCategoryLocal,
   deleteTransactionLocal,
   dismissDuplicateLocal,
   payTransactionLocal,
@@ -68,10 +71,12 @@ import { ImportAiModal } from '@/components/ImportAiModal';
 import { ShareTransactionModal } from '@/components/ShareTransactionModal';
 import { ConsistencyCheckModal } from '@/components/ConsistencyCheckModal';
 import { RecurringFormModal, type RecurringInitial } from '@/components/RecurringFormModal';
+import { InstallmentFormModal, type InstallmentInitial } from '@/components/InstallmentFormModal';
 import { SuggestedRecurringSection } from '@/components/SuggestedRecurringSection';
 import { LoadMore } from '@/components/LoadMore';
 import { FiltersSheet, FilterField } from '@/components/FiltersSheet';
 import { SelectionBar } from '@/components/SelectionBar';
+import { BulkCategoryDialog } from '@/components/BulkCategoryDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { usePagedList } from '@/hooks/usePagedList';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -114,6 +119,12 @@ export function TransactionsPage() {
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
   // Criar recorrência a partir de um lançamento (vincula a transação existente).
   const [recurringFrom, setRecurringFrom] = useState<{ initial: RecurringInitial; linkIds: string[] } | null>(null);
+  // Criar parcelamento a partir de um lançamento. O original é removido ao criar
+  // (o plano materializa a parcela 1..N — manter o original duplicaria o valor).
+  const [installmentFrom, setInstallmentFrom] = useState<{
+    initial: InstallmentInitial;
+    linkKeys: string[];
+  } | null>(null);
 
   // Seleção em massa (p/ marcar transações compartilhadas de uma vez).
   const [selectMode, setSelectMode] = useState(false);
@@ -124,6 +135,9 @@ export function TransactionsPage() {
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
   const [bulkTagIds, setBulkTagIds] = useState<string[]>([]);
   const [bulkTagging, setBulkTagging] = useState(false);
+  // Alteração de categoria em massa das transações selecionadas.
+  const [bulkCatOpen, setBulkCatOpen] = useState(false);
+  const [bulkCatting, setBulkCatting] = useState(false);
 
   // Pessoas cadastradas (settings) p/ autocomplete no rateio.
   const [contacts, setContacts] = useState<string[]>([]);
@@ -179,6 +193,7 @@ export function TransactionsPage() {
   const tagMap = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
   // Resolve a key local → id do servidor (recorrência é online, usa ids reais).
   const accIdMap = useMemo(() => new Map(accounts.map((a) => [a.key, a.id ?? a.key])), [accounts]);
+  const cardIdMap = useMemo(() => new Map(cards.map((c) => [c.key, c.id ?? c.key])), [cards]);
   const catIdMap = useMemo(() => new Map(categories.map((c) => [c.key, c.id ?? c.key])), [categories]);
   const dupes = useMemo(() => detectDuplicates(txs), [txs]);
   // Cópias redundantes (mantém uma por grupo) — alvo do "Remover duplicadas".
@@ -261,6 +276,27 @@ export function TransactionsPage() {
         tagIds: t.tagIds ?? [],
       },
       linkIds: t.id ? [t.id] : [],
+    });
+  };
+
+  // Abre o form de parcelamento pré-preenchido a partir de um lançamento. O
+  // valor do lançamento vira o total do plano; ao criar, o original é removido.
+  const openInstallment = (t: LocalTransaction) => {
+    const source = t.creditCardId
+      ? `card:${cardIdMap.get(t.creditCardId) ?? t.creditCardId}`
+      : t.accountId
+        ? `acc:${accIdMap.get(t.accountId) ?? t.accountId}`
+        : '';
+    setInstallmentFrom({
+      initial: {
+        source,
+        description: t.description,
+        totalAmount: Math.abs(Number(t.amount)),
+        firstDueDate: new Date(t.date),
+        categoryId: t.categoryId ? catIdMap.get(t.categoryId) ?? null : null,
+        tagIds: t.tagIds ?? [],
+      },
+      linkKeys: [t.key],
     });
   };
 
@@ -389,6 +425,30 @@ export function TransactionsPage() {
       toast.error('Não foi possível aplicar as tags');
     } finally {
       setBulkTagging(false);
+    }
+  };
+
+  const openBulkCategory = () => {
+    if (selected.size === 0) return toast.error('Selecione ao menos uma transação');
+    setBulkCatOpen(true);
+  };
+
+  const applyBulkCategory = async (categoryId: string | null) => {
+    setBulkCatting(true);
+    try {
+      await bulkSetCategoryLocal([...selected], categoryId);
+      void syncNow();
+      toast.success(
+        selected.size === 1
+          ? 'Categoria alterada em 1 lançamento'
+          : `Categoria alterada em ${selected.size} lançamentos`,
+      );
+      setBulkCatOpen(false);
+      exitSelect();
+    } catch {
+      toast.error('Não foi possível alterar a categoria');
+    } finally {
+      setBulkCatting(false);
     }
   };
 
@@ -733,6 +793,12 @@ export function TransactionsPage() {
                             Criar recorrência
                           </DropdownMenuItem>
                         )}
+                        {t.type === 'EXPENSE' && (
+                          <DropdownMenuItem onClick={() => openInstallment(t)}>
+                            <CreditCard className="h-4 w-4" />
+                            Criar parcelamento
+                          </DropdownMenuItem>
+                        )}
                         {isDupe && (
                           <>
                             <DropdownMenuSeparator />
@@ -776,6 +842,10 @@ export function TransactionsPage() {
           onToggleAll={toggleAll}
           onCancel={exitSelect}
         >
+          <Button variant="outline" onClick={openBulkCategory} disabled={selected.size === 0}>
+            <Shapes className="h-4 w-4" />
+            Categoria
+          </Button>
           <Button variant="outline" onClick={openBulkTags} disabled={selected.size === 0}>
             <TagIcon className="h-4 w-4" />
             Tags
@@ -806,6 +876,17 @@ export function TransactionsPage() {
         }
         loading={bulkDeleting}
         onConfirm={() => void bulkDelete()}
+      />
+
+      <BulkCategoryDialog
+        open={bulkCatOpen}
+        onOpenChange={setBulkCatOpen}
+        categories={categories}
+        count={selected.size}
+        loading={bulkCatting}
+        getValue={(c) => c.key}
+        onApply={(id) => void applyBulkCategory(id)}
+        noun={{ one: 'lançamento', many: 'lançamentos' }}
       />
 
       <Dialog open={bulkTagOpen} onOpenChange={(o) => !bulkTagging && setBulkTagOpen(o)}>
@@ -915,6 +996,21 @@ export function TransactionsPage() {
               initial={recurringFrom.initial}
               linkTransactionIds={recurringFrom.linkIds}
               title="Criar recorrência"
+            />
+          )}
+          {installmentFrom && (
+            <InstallmentFormModal
+              opened={!!installmentFrom}
+              onClose={() => setInstallmentFrom(null)}
+              workspaceId={activeId}
+              accounts={accounts}
+              cards={cards}
+              categories={categories}
+              tags={tags}
+              ownerName={ownerName}
+              initial={installmentFrom.initial}
+              linkTransactionKeys={installmentFrom.linkKeys}
+              title="Criar parcelamento"
             />
           )}
           <ConsistencyCheckModal

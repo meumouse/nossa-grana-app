@@ -367,6 +367,9 @@ export const installmentApi = {
     api.post<{ plan: InstallmentPlan }>(wsPath(ws, '/installments'), body),
   update: (ws: string, id: string, body: InstallmentInput) =>
     api.patch<{ plan: InstallmentPlan }>(wsPath(ws, `/installments/${id}`), body),
+  // Troca só a categoria do plano (propaga às parcelas, sem regenerar o quadro).
+  setCategory: (ws: string, id: string, categoryId: string | null) =>
+    api.patch<{ plan: InstallmentPlan }>(wsPath(ws, `/installments/${id}/category`), { categoryId }),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/installments/${id}`)),
 };
 

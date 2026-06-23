@@ -198,6 +198,23 @@ export async function bulkAddTagsLocal(keys: string[], tagIds: string[]): Promis
   });
 }
 
+/**
+ * Define a MESMA categoria em várias transações de uma vez (substitui a atual).
+ * `categoryId` é a key local da categoria (ou `null` para limpar). Pula as que já
+ * estão na categoria alvo, evitando push desnecessário.
+ */
+export async function bulkSetCategoryLocal(keys: string[], categoryId: string | null): Promise<void> {
+  await db.transaction('rw', db.transactions, db.outbox, async () => {
+    for (const key of keys) {
+      const row = await db.transactions.get(key);
+      if (!row) continue;
+      if ((row.categoryId ?? null) === (categoryId ?? null)) continue;
+      await db.transactions.put({ ...row, categoryId: categoryId ?? null, updatedAt: nowIso() });
+      await enqueue('transaction', row.clientId, 'upsert', row.workspaceId);
+    }
+  });
+}
+
 /** Alterna o status "pago" de um participante (por índice) de uma transação. */
 export async function toggleSharePaidLocal(key: string, shareIndex: number): Promise<void> {
   const row = await db.transactions.get(key);
