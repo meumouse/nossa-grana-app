@@ -81,7 +81,10 @@ export function TagPicker({ workspaceId, tags, value, onChange }: Props) {
 
   return (
     <div className="space-y-2">
-      <Popover open={open} onOpenChange={setOpen}>
+      {/* `modal`: dentro de um Dialog/Sheet (que travam o scroll do resto da
+          página via RemoveScroll), só assim a lista de tags rola — o popover
+          ganha sua própria área rolável. */}
+      <Popover open={open} onOpenChange={setOpen} modal>
         <PopoverTrigger asChild>
           <button
             type="button"

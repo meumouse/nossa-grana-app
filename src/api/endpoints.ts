@@ -321,6 +321,8 @@ export interface RecurringInput {
   autoConfirm?: boolean;
   /** Ids de transações existentes da série, p/ vincular (sem duplicar valores). */
   linkTransactionIds?: string[];
+  /** Tags (ids do servidor) aplicadas à recorrência e a cada ocorrência gerada. */
+  tagIds?: string[];
 }
 
 export const recurringApi = {
@@ -353,6 +355,8 @@ export interface InstallmentInput {
   shares?: TxShare[] | null;
   /** Total de pessoas no rateio (default = nº de participantes). */
   shareCount?: number | null;
+  /** Tags (ids do servidor) aplicadas ao plano e a cada parcela gerada. */
+  tagIds?: string[];
 }
 
 export const installmentApi = {

@@ -10,9 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
+import { TagPicker } from '@/components/TagPicker';
 import { recurringApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
-import type { LocalAccount, LocalCategory } from '@/db/dexie';
+import type { LocalAccount, LocalCategory, LocalTag } from '@/db/dexie';
 import type { RecurrenceFrequency } from '@/api/types';
 
 export const FREQ_LABELS: Record<RecurrenceFrequency, string> = {
@@ -35,6 +36,7 @@ export interface RecurringInitial {
   anchorDay?: number | null;
   startDate?: Date;
   endDate?: Date | null;
+  tagIds?: string[];
 }
 
 interface Props {
@@ -43,6 +45,8 @@ interface Props {
   workspaceId: string;
   accounts: LocalAccount[];
   categories: LocalCategory[];
+  /** Catálogo de tags do workspace (para o seletor). */
+  tags?: LocalTag[];
   /** Pré-preenchimento; ausente = recorrência nova em branco. */
   initial?: RecurringInitial | null;
   /** Transações existentes da série, vinculadas ao criar (sem duplicar valores). */
@@ -74,6 +78,7 @@ export function RecurringFormModal({
   workspaceId,
   accounts,
   categories,
+  tags = [],
   initial,
   linkTransactionIds,
   title = 'Nova recorrência',
@@ -90,6 +95,7 @@ export function RecurringFormModal({
   const [startDate, setStartDate] = useState<Date>(() => new Date());
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [autoConfirm, setAutoConfirm] = useState(false);
+  const [tagIds, setTagIds] = useState<string[]>([]);
   // anchorDay não é editável na UI; vem do pré-preenchimento (extrato/sugestão).
   const [anchorDay, setAnchorDay] = useState<number | null>(null);
 
@@ -107,6 +113,7 @@ export function RecurringFormModal({
     setEndDate(initial?.endDate ?? undefined);
     setAnchorDay(initial?.anchorDay ?? null);
     setAutoConfirm(false);
+    setTagIds(initial?.tagIds ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened]);
 
@@ -125,6 +132,7 @@ export function RecurringFormModal({
         endDate: endDate ? endDate.toISOString() : null,
         autoConfirm,
         linkTransactionIds: linkTransactionIds?.length ? linkTransactionIds : undefined,
+        tagIds,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['recurring', workspaceId] });
@@ -225,6 +233,11 @@ export function RecurringFormModal({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Tags</Label>
+            <TagPicker workspaceId={workspaceId} tags={tags} value={tagIds} onChange={setTagIds} />
           </div>
 
           <div className="grid grid-cols-2 gap-2">

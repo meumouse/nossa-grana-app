@@ -378,6 +378,7 @@ export interface RecurringTransaction {
   updatedAt: string;
   deletedAt: string | null;
   category?: Pick<Category, 'id' | 'name' | 'color' | 'icon'> | null;
+  tags?: Pick<Tag, 'id' | 'name' | 'color'>[];
 }
 
 /**
@@ -421,6 +422,7 @@ export interface InstallmentPlan {
   deletedAt: string | null;
   _count?: { transactions: number };
   transactions?: Transaction[];
+  tags?: Pick<Tag, 'id' | 'name' | 'color'>[];
 }
 
 // ---- Faturas de cartão ----

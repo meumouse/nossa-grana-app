@@ -1,5 +1,24 @@
 # Changelog
 
+Versão 1.2.0 (23/06/2026)
+* Novidades:
+    - Etiquetas (tags) também em recorrências e parcelamentos: o seletor aparece nos formulários, as etiquetas são aplicadas a cada ocorrência/parcela gerada e os chips coloridos surgem nas listas
+    - Revisão de duplicidades guiada: o aviso de "possível duplicidade" ganhou o botão "Analisar lançamentos", que abre uma tela para decidir, grupo a grupo, quais excluir ou confirmar como legítimos
+    - Filtro "Apenas possíveis duplicidades" no extrato
+    - Aplicar tags em massa: ao selecionar vários lançamentos, o botão "Tags" adiciona etiquetas a todos de uma vez (sem remover as já aplicadas)
+* Correções:
+    - Lista de tags agora rola corretamente quando aberta dentro de formulários e do painel de filtros
+
+Versão 1.1.0 (23/06/2026)
+* Novidades:
+    - Etiquetas (tags) nos lançamentos: seletor com criação rápida e cores, filtro do extrato por etiqueta, chips coloridos e gerenciamento nas configurações
+    - Campo de observação nos lançamentos
+    - Página de Documentos: envio direto, lista, download, exclusão e importação por IA
+    - Importação por IA a partir de um documento já enviado, sem precisar reenviar o arquivo
+    - Gerenciamento de categorias e instituições personalizadas nas configurações, com envio de logo (inclui o monograma da Havan)
+* Melhorias:
+    - Acompanhamento do progresso da leitura parte a parte ("lendo parte X de Y") em documentos grandes
+
 Versão 1.0.0 (22/06/2026)
 * Novidades:
     - Nova etapa de confirmação na importação com IA: após enviar, você vê os dados do documento (nome, tipo, tamanho e número de páginas) antes de a IA ler o arquivo

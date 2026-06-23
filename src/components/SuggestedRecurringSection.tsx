@@ -8,6 +8,7 @@ import { recurringApi } from '@/api/endpoints';
 import { formatMoney } from '@/lib/format';
 import { FREQ_LABELS, RecurringFormModal, type RecurringInitial } from '@/components/RecurringFormModal';
 import { useSync } from '@/sync/SyncProvider';
+import { useLiveTags } from '@/hooks/useLiveData';
 import type { LocalAccount, LocalCategory } from '@/db/dexie';
 import type { RecurringSuggestion } from '@/api/types';
 
@@ -53,6 +54,7 @@ function cadenceLabel(s: RecurringSuggestion): string {
  */
 export function SuggestedRecurringSection({ workspaceId, accounts, categories }: Props) {
   const { online } = useSync();
+  const tags = useLiveTags(workspaceId) ?? [];
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed(workspaceId));
   const [modalInitial, setModalInitial] = useState<RecurringInitial | null>(null);
   const [linkIds, setLinkIds] = useState<string[]>([]);
@@ -152,6 +154,7 @@ export function SuggestedRecurringSection({ workspaceId, accounts, categories }:
         workspaceId={workspaceId}
         accounts={accounts}
         categories={categories}
+        tags={tags}
         initial={modalInitial}
         linkTransactionIds={linkIds}
         title="Cadastrar recorrência"

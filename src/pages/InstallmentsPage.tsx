@@ -16,13 +16,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/components/ui/sonner';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
 import { useAuth } from '@/auth/AuthProvider';
-import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTransactions } from '@/hooks/useLiveData';
+import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTags, useLiveTransactions } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
 import { payTransactionLocal, unpayTransactionLocal } from '@/sync/mutations';
 import { installmentApi, transactionApi, workspaceApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
 import { FiltersSheet, FilterField } from '@/components/FiltersSheet';
+import { TagPicker } from '@/components/TagPicker';
 import { LoadMore } from '@/components/LoadMore';
 import { SelectionBar } from '@/components/SelectionBar';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -59,6 +60,7 @@ export function InstallmentsPage() {
   const accounts = useLiveAccounts(activeId) ?? [];
   const cards = (useLiveCards(activeId) ?? []).filter((c) => !c.archived);
   const categories = useLiveCategories(activeId) ?? [];
+  const tags = useLiveTags(activeId) ?? [];
   const liveTxs = useLiveTransactions(activeId) ?? [];
 
   const ownerName = user?.name?.trim() || 'Você';
@@ -81,6 +83,7 @@ export function InstallmentsPage() {
   // Origem: conta ou cartão, codificada em "acc:<id>" / "card:<id>".
   const [source, setSource] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [tagIds, setTagIds] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [installments, setInstallments] = useState('2');
@@ -147,6 +150,7 @@ export function InstallmentsPage() {
         categoryId: categoryId || null,
         shares: isShared ? shares : null,
         shareCount: isShared ? peopleCount : null,
+        tagIds,
       };
       return editId
         ? installmentApi.update(activeId!, editId, body)
@@ -184,6 +188,7 @@ export function InstallmentsPage() {
           : '',
     );
     setCategoryId('');
+    setTagIds([]);
     setDescription('');
     setTotalAmount('');
     setInstallments('2');
@@ -229,6 +234,7 @@ export function InstallmentsPage() {
       setEditId(id);
       setSource(src);
       setCategoryId(plan.categoryId ?? '');
+      setTagIds((plan.tags ?? []).map((t) => t.id));
       setDescription(plan.description);
       setTotalAmount(String(plan.totalAmount).replace('.', ','));
       setInstallments(String(plan.installments));
@@ -471,6 +477,19 @@ export function InstallmentsPage() {
                 <p className="text-xs text-muted-foreground">
                   {p.installments}x · 1ª em {formatDate(p.firstDueDate)}
                 </p>
+                {p.tags && p.tags.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {p.tags.map((t) => (
+                      <span
+                        key={t.id}
+                        className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none"
+                        style={t.color ? { borderColor: t.color, color: t.color } : undefined}
+                      >
+                        {t.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="whitespace-nowrap font-bold">{formatMoney(p.totalAmount, hidden)}</span>
@@ -634,6 +653,12 @@ export function InstallmentsPage() {
                 </SelectContent>
               </Select>
             </div>
+            {activeId && (
+              <div className="space-y-1.5">
+                <Label>Tags</Label>
+                <TagPicker workspaceId={activeId} tags={tags} value={tagIds} onChange={setTagIds} />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label htmlFor="ins-start">Parcela atual</Label>

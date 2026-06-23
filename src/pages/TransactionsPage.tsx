@@ -18,8 +18,10 @@ import {
   ArrowDownRight,
   ArrowLeftRight,
   ChevronDown,
+  Tag as TagIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Fab } from '@/components/ui/fab';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -51,14 +53,16 @@ import { useLiveAccounts, useLiveCards, useLiveCategories, useLiveTags, useLiveT
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { useSync } from '@/sync/SyncProvider';
 import {
+  bulkAddTagsLocal,
   deleteTransactionLocal,
   dismissDuplicateLocal,
   payTransactionLocal,
   unpayTransactionLocal,
 } from '@/sync/mutations';
 import { memberApi, workspaceApi } from '@/api/endpoints';
-import { detectDuplicates, redundantDuplicates } from '@/lib/duplicates';
+import { detectDuplicates, duplicateGroups, redundantDuplicates } from '@/lib/duplicates';
 import { TransactionFormModal } from '@/components/TransactionFormModal';
+import { DuplicateReviewModal } from '@/components/DuplicateReviewModal';
 import { TagPicker } from '@/components/TagPicker';
 import { ImportAiModal } from '@/components/ImportAiModal';
 import { ShareTransactionModal } from '@/components/ShareTransactionModal';
@@ -100,6 +104,7 @@ export function TransactionsPage() {
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [onlyDupes, setOnlyDupes] = useState(false);
   const [range, setRange] = useState<DateRange | undefined>(undefined);
 
   const [opened, setOpened] = useState(false);
@@ -115,6 +120,10 @@ export function TransactionsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Aplicação de tags em massa às transações selecionadas.
+  const [bulkTagOpen, setBulkTagOpen] = useState(false);
+  const [bulkTagIds, setBulkTagIds] = useState<string[]>([]);
+  const [bulkTagging, setBulkTagging] = useState(false);
 
   // Pessoas cadastradas (settings) p/ autocomplete no rateio.
   const [contacts, setContacts] = useState<string[]>([]);
@@ -174,8 +183,11 @@ export function TransactionsPage() {
   const dupes = useMemo(() => detectDuplicates(txs), [txs]);
   // Cópias redundantes (mantém uma por grupo) — alvo do "Remover duplicadas".
   const removableDupes = useMemo(() => redundantDuplicates(txs), [txs]);
+  // Grupos completos (2+ por grupo) — alimentam a revisão "Analisar lançamentos".
+  const dupeGroups = useMemo(() => duplicateGroups(txs), [txs]);
   const [removeDupesOpen, setRemoveDupesOpen] = useState(false);
   const [removingDupes, setRemovingDupes] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   // Filtros da sidebar (sem a busca por texto, que fica inline) — alimenta o badge.
   const filterCount =
@@ -183,6 +195,7 @@ export function TransactionsPage() {
     (categoryFilter !== 'ALL' ? 1 : 0) +
     (typeFilter !== 'ALL' ? 1 : 0) +
     (tagFilter.length > 0 ? 1 : 0) +
+    (onlyDupes ? 1 : 0) +
     (range?.from || range?.to ? 1 : 0);
 
   const filtersActive = search.trim() !== '' || filterCount > 0;
@@ -196,18 +209,19 @@ export function TransactionsPage() {
       if (categoryFilter !== 'ALL' && (t.categoryId ?? '') !== categoryFilter) return false;
       if (typeFilter !== 'ALL' && t.type !== typeFilter) return false;
       if (tagFilter.length > 0 && !(t.tagIds ?? []).some((id) => tagFilter.includes(id))) return false;
+      if (onlyDupes && !dupes.has(t.key)) return false;
       if (q && !`${t.description} ${t.notes ?? ''}`.toLowerCase().includes(q)) return false;
       const day = t.date.slice(0, 10);
       if (fromStr && day < fromStr) return false;
       if (toStr && day > toStr) return false;
       return true;
     });
-  }, [txs, search, accountFilter, categoryFilter, typeFilter, tagFilter, range]);
+  }, [txs, search, accountFilter, categoryFilter, typeFilter, tagFilter, onlyDupes, dupes, range]);
 
   // Paginação "carregar mais" sobre o extrato já filtrado. Volta à 1ª página
   // quando filtros, busca ou aba de status mudam.
   const paged = usePagedList(visible, {
-    resetKey: `${filter}|${search}|${accountFilter}|${categoryFilter}|${typeFilter}|${tagFilter.join(',')}|${range?.from?.toISOString() ?? ''}|${range?.to?.toISOString() ?? ''}`,
+    resetKey: `${filter}|${search}|${accountFilter}|${categoryFilter}|${typeFilter}|${tagFilter.join(',')}|${onlyDupes}|${range?.from?.toISOString() ?? ''}|${range?.to?.toISOString() ?? ''}`,
   });
 
   const clearFilters = () => {
@@ -216,6 +230,7 @@ export function TransactionsPage() {
     setCategoryFilter('ALL');
     setTypeFilter('ALL');
     setTagFilter([]);
+    setOnlyDupes(false);
     setRange(undefined);
   };
 
@@ -243,6 +258,7 @@ export function TransactionsPage() {
         frequency: 'MONTHLY',
         anchorDay: Number.isFinite(day) ? day : null,
         startDate: new Date(t.date),
+        tagIds: t.tagIds ?? [],
       },
       linkIds: t.id ? [t.id] : [],
     });
@@ -294,6 +310,25 @@ export function TransactionsPage() {
     toast('Marcada como legítima');
   };
 
+  // Exclusão em lote a partir da revisão de duplicidades.
+  const reviewDelete = async (keys: string[]) => {
+    if (keys.length === 0) return;
+    try {
+      for (const key of keys) await deleteTransactionLocal(key);
+      void syncNow();
+      toast.success(keys.length === 1 ? '1 lançamento excluído' : `${keys.length} lançamentos excluídos`);
+    } catch {
+      toast.error('Não foi possível excluir os lançamentos');
+    }
+  };
+
+  // Marca um grupo inteiro como legítimo (não é duplicata) a partir da revisão.
+  const reviewDismiss = async (keys: string[]) => {
+    await dismissDuplicateLocal(keys);
+    void syncNow();
+    toast('Grupo marcado como legítimo');
+  };
+
   const toggleSelected = (key: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -316,6 +351,32 @@ export function TransactionsPage() {
   const allSelected = paged.visible.length > 0 && paged.visible.every((t) => selected.has(t.key));
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(paged.visible.map((t) => t.key)));
+
+  const openBulkTags = () => {
+    if (selected.size === 0) return toast.error('Selecione ao menos uma transação');
+    setBulkTagIds([]);
+    setBulkTagOpen(true);
+  };
+
+  const applyBulkTags = async () => {
+    if (bulkTagIds.length === 0) return;
+    setBulkTagging(true);
+    try {
+      await bulkAddTagsLocal([...selected], bulkTagIds);
+      void syncNow();
+      toast.success(
+        selected.size === 1
+          ? 'Tags aplicadas a 1 lançamento'
+          : `Tags aplicadas a ${selected.size} lançamentos`,
+      );
+      setBulkTagOpen(false);
+      exitSelect();
+    } catch {
+      toast.error('Não foi possível aplicar as tags');
+    } finally {
+      setBulkTagging(false);
+    }
+  };
 
   const bulkDelete = async () => {
     setBulkDeleting(true);
@@ -386,6 +447,15 @@ export function TransactionsPage() {
             {dupes.size} {dupes.size === 1 ? 'lançamento com' : 'lançamentos com'} possível duplicidade. Revise os
             marcados abaixo.
           </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setReviewOpen(true)}
+          >
+            <CheckSquare className="h-4 w-4" />
+            Analisar lançamentos
+          </Button>
           {removableDupes.length > 0 && (
             <Button
               variant="destructive"
@@ -475,6 +545,12 @@ export function TransactionsPage() {
                 <TagPicker workspaceId={activeId} tags={tags} value={tagFilter} onChange={setTagFilter} />
               </FilterField>
             )}
+            <FilterField label="Duplicidade">
+              <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md border p-2.5 text-sm">
+                <span className="text-muted-foreground">Apenas possíveis duplicidades</span>
+                <Switch checked={onlyDupes} onCheckedChange={setOnlyDupes} />
+              </label>
+            </FilterField>
           </FiltersSheet>
         </div>
         {filtersActive && (
@@ -684,6 +760,10 @@ export function TransactionsPage() {
           onToggleAll={toggleAll}
           onCancel={exitSelect}
         >
+          <Button variant="outline" onClick={openBulkTags} disabled={selected.size === 0}>
+            <TagIcon className="h-4 w-4" />
+            Tags
+          </Button>
           <Button variant="secondary" onClick={openBulkShare} disabled={selected.size === 0}>
             <Users className="h-4 w-4" />
             Compartilhar
@@ -710,6 +790,40 @@ export function TransactionsPage() {
         }
         loading={bulkDeleting}
         onConfirm={() => void bulkDelete()}
+      />
+
+      <Dialog open={bulkTagOpen} onOpenChange={(o) => !bulkTagging && setBulkTagOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar tags</DialogTitle>
+            <DialogDescription>
+              As tags escolhidas serão adicionadas a {selected.size}{' '}
+              {selected.size === 1 ? 'lançamento' : 'lançamentos'} (as tags já aplicadas são mantidas).
+            </DialogDescription>
+          </DialogHeader>
+          {activeId && (
+            <TagPicker workspaceId={activeId} tags={tags} value={bulkTagIds} onChange={setBulkTagIds} />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkTagOpen(false)} disabled={bulkTagging}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void applyBulkTags()} disabled={bulkTagging || bulkTagIds.length === 0}>
+              <TagIcon className="h-4 w-4" />
+              {bulkTagging ? 'Aplicando…' : 'Aplicar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <DuplicateReviewModal
+        opened={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        groups={dupeGroups}
+        accMap={accMap}
+        hidden={hidden}
+        onDelete={reviewDelete}
+        onDismiss={reviewDismiss}
       />
 
       <Dialog open={removeDupesOpen} onOpenChange={(o) => !removingDupes && setRemoveDupesOpen(o)}>
@@ -781,6 +895,7 @@ export function TransactionsPage() {
               workspaceId={activeId}
               accounts={accounts}
               categories={categories}
+              tags={tags}
               initial={recurringFrom.initial}
               linkTransactionIds={recurringFrom.linkIds}
               title="Criar recorrência"

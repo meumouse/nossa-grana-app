@@ -179,6 +179,25 @@ export async function bulkSetSharesLocal(
   });
 }
 
+/**
+ * Adiciona as tags informadas a várias transações de uma vez (união com as que
+ * já existem — não remove nenhuma). Transações que já tinham todas as tags não
+ * são sujadas (evita push desnecessário).
+ */
+export async function bulkAddTagsLocal(keys: string[], tagIds: string[]): Promise<void> {
+  if (tagIds.length === 0) return;
+  await db.transaction('rw', db.transactions, db.outbox, async () => {
+    for (const key of keys) {
+      const row = await db.transactions.get(key);
+      if (!row) continue;
+      const merged = Array.from(new Set([...(row.tagIds ?? []), ...tagIds]));
+      if (merged.length === (row.tagIds?.length ?? 0)) continue;
+      await db.transactions.put({ ...row, tagIds: merged, updatedAt: nowIso() });
+      await enqueue('transaction', row.clientId, 'upsert', row.workspaceId);
+    }
+  });
+}
+
 /** Alterna o status "pago" de um participante (por índice) de uma transação. */
 export async function toggleSharePaidLocal(key: string, shareIndex: number): Promise<void> {
   const row = await db.transactions.get(key);

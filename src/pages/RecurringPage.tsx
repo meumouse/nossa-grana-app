@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/workspace/WorkspaceProvider';
-import { useLiveAccounts, useLiveCategories } from '@/hooks/useLiveData';
+import { useLiveAccounts, useLiveCategories, useLiveTags } from '@/hooks/useLiveData';
 import { usePrivacy } from '@/ui/PrivacyProvider';
 import { recurringApi } from '@/api/endpoints';
 import { ApiError, OfflineError } from '@/api/client';
@@ -37,6 +37,7 @@ export function RecurringPage() {
   const qc = useQueryClient();
   const accounts = useLiveAccounts(activeId) ?? [];
   const categories = useLiveCategories(activeId) ?? [];
+  const tags = useLiveTags(activeId) ?? [];
 
   const [opened, setOpened] = useState(false);
   const sel = useSelection();
@@ -178,6 +179,7 @@ export function RecurringPage() {
           workspaceId={activeId}
           accounts={accounts}
           categories={categories}
+          tags={tags}
         />
       )}
     </div>
@@ -234,6 +236,19 @@ function RecurringCard({
           {every}
           {item.category?.name ? ` · ${item.category.name}` : ''}
         </p>
+        {item.tags && item.tags.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {item.tags.map((t) => (
+              <span
+                key={t.id}
+                className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none"
+                style={t.color ? { borderColor: t.color, color: t.color } : undefined}
+              >
+                {t.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <span
