@@ -25,9 +25,9 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { toast } from '@/components/ui/sonner';
 import { useLiveAccounts, useLiveCards, useLiveCategories } from '@/hooks/useLiveData';
 import { useSync } from '@/sync/SyncProvider';
-import { importApi } from '@/api/endpoints';
+import { importApi, documentApi } from '@/api/endpoints';
 import { ApiError } from '@/api/client';
-import type { ImportBatch, ImportItem, ImportSource } from '@/api/types';
+import type { DocumentFile, ImportBatch, ImportItem, ImportSource } from '@/api/types';
 
 interface Props {
   opened: boolean;
@@ -174,6 +174,11 @@ export function ImportAiModal({
   const [dragOver, setDragOver] = useState(false);
   // Progresso do fracionamento na extração ("lendo parte X de Y"). null = sem chunks.
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  // Documentos já enviados (Documentos/S3), para reimportar sem subir um novo
+  // arquivo. null = ainda carregando a lista.
+  const [documents, setDocuments] = useState<DocumentFile[] | null>(null);
+  // Preparando o lote a partir de um documento existente (entre o clique e a extração).
+  const [picking, setPicking] = useState(false);
 
   const patchRow = (id: string, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -184,6 +189,7 @@ export function ImportAiModal({
     setRows([]);
     setDragOver(false);
     setProgress(null);
+    setPicking(false);
     if (fileInput.current) fileInput.current.value = '';
   };
 
@@ -247,6 +253,61 @@ export function ImportAiModal({
     }
   }, [opened, initialBatch, initialSource, workspaceId]);
 
+  // Modo "upload novo": ao abrir sem lote inicial, carrega os documentos já
+  // enviados para permitir reimportar um deles sem subir o arquivo de novo.
+  useEffect(() => {
+    if (!opened || initialBatch) return;
+    let cancelled = false;
+    setDocuments(null);
+    documentApi
+      .list(workspaceId)
+      .then(({ items }) => {
+        if (!cancelled) setDocuments(items);
+      })
+      .catch(() => {
+        if (!cancelled) setDocuments([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [opened, initialBatch, workspaceId]);
+
+  // Reimporta um documento já enviado: cria o lote (via documentApi.import, que
+  // dispara a extração) e segue o mesmo fluxo do upload (extração → revisão).
+  const onPickDocument = async (docId: string) => {
+    if (!source) {
+      toast.error('Escolha a conta ou o cartão de destino antes de selecionar o documento.');
+      return;
+    }
+    setPicking(true);
+    setProgress(null);
+    let created = false;
+    try {
+      const { batch: b } = await documentApi.import(workspaceId, docId, decodeSource(source));
+      created = true;
+      setBatch(b);
+      if (b.status === 'PENDING_REVIEW') {
+        goToReview(b);
+      } else if (b.status === 'FAILED') {
+        toast.error(b.error ?? 'Falha ao ler o documento.');
+        setPhase('uploaded');
+      } else {
+        setPhase('extracting');
+        const extracted = await waitForExtraction(workspaceId, b.id, (done, total) =>
+          setProgress({ done, total }),
+        );
+        goToReview(extracted);
+      }
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Falha ao importar o documento.';
+      toast.error(msg);
+      // Lote já criado: cai na tela de confirmação (reprocessável). Senão, volta à seleção.
+      setPhase(created ? 'uploaded' : 'idle');
+    } finally {
+      setPicking(false);
+    }
+  };
+
   // Etapa 1: envia o documento (sem IA ainda). Em UPLOADED, mostra os dados do
   // doc e aguarda o "Continuar"; sem storage o backend já extrai inline e volta
   // PENDING_REVIEW, então pulamos direto para a revisão.
@@ -309,10 +370,14 @@ export function ImportAiModal({
     }
     setConfirming(true);
     try {
-      // Persiste os valores revisados (só dos itens aceitos) antes de confirmar.
-      for (const r of accepted) {
+      // Envia o estado revisado de todos os itens aceitos num único request (a
+      // API grava em massa e enfileira). Antes era um PATCH por item — em lotes
+      // grandes (centenas de transações) isso virava uma enxurrada de requisições
+      // que estourava o rate-limit e derrubava a importação.
+      const items = accepted.map((r) => {
         const owner = decodeSource(r.source);
-        await importApi.patchItem(workspaceId, batch.id, r.id, {
+        return {
+          id: r.id,
           date: r.date.toISOString(),
           description: r.description.trim(),
           amount: Number(r.amount.replace(',', '.')),
@@ -320,10 +385,9 @@ export function ImportAiModal({
           categoryId: r.categoryId || null,
           accountId: owner.accountId ?? null,
           creditCardId: owner.creditCardId ?? null,
-          status: 'ACCEPTED',
-        });
-      }
-      const res = await importApi.confirm(workspaceId, batch.id, decodeSource(source));
+        };
+      });
+      const res = await importApi.confirm(workspaceId, batch.id, decodeSource(source), items);
       // Com fila, a API só enfileira (202): acompanha o processamento em
       // background por polling até concluir. Sem fila, já vem o total importado.
       const imported = res.queued
@@ -357,8 +421,8 @@ export function ImportAiModal({
             Importar com IA
           </DialogTitle>
           <DialogDescription>
-            Suba um extrato, fatura ou comprovante (PDF, imagem, CSV ou OFX). A IA extrai os
-            lançamentos para você revisar e confirmar.
+            Suba um extrato, fatura ou comprovante (PDF, imagem, CSV ou OFX) — ou escolha um
+            documento já enviado. A IA extrai os lançamentos para você revisar e confirmar.
           </DialogDescription>
         </DialogHeader>
 
@@ -420,6 +484,35 @@ export function ImportAiModal({
                 </span>
                 <span className="text-xs">PDF · Imagem · CSV · OFX</span>
               </button>
+            )}
+
+            {phase === 'idle' && documents && documents.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="h-px flex-1 bg-border" />
+                  ou escolha um documento já enviado
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+                <Select disabled={picking} onValueChange={(v) => void onPickDocument(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Documentos salvos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {documents.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.filename} · {formatBytes(d.fileSize)} ·{' '}
+                        {new Date(d.createdAt).toLocaleDateString('pt-BR')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {picking && (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Preparando o documento…
+                  </p>
+                )}
+              </div>
             )}
 
             {phase === 'uploading' && (

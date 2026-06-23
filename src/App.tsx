@@ -76,7 +76,7 @@ function AppRoutes() {
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/cards" element={<CardsPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/documentos" element={<DocumentosPage />} />
+        <Route path="/documents" element={<DocumentosPage />} />
         <Route path="/payables" element={<PayablesPage />} />
         <Route path="/budgets" element={<BudgetsPage />} />
         <Route path="/recurring" element={<RecurringPage />} />

@@ -209,6 +209,21 @@ export interface ImportOwner {
   creditCardId?: string;
 }
 
+/**
+ * Item revisado enviado no confirm. Carrega o estado final da tela de revisão
+ * num único payload (substitui o PATCH por item).
+ */
+export interface ReviewedImportItem {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: 'INCOME' | 'EXPENSE';
+  categoryId?: string | null;
+  accountId?: string | null;
+  creditCardId?: string | null;
+}
+
 export const importApi = {
   upload: (ws: string, file: File, owner: ImportOwner = {}) => {
     const form = new FormData();
@@ -228,13 +243,16 @@ export const importApi = {
     api.post<{ batch: ImportBatch; queued: boolean }>(wsPath(ws, `/imports/${id}/extract`)),
   patchItem: (ws: string, id: string, itemId: string, body: ImportItemPatch) =>
     api.patch<{ item: ImportItem }>(wsPath(ws, `/imports/${id}/items/${itemId}`), body),
-  // Quando há fila (Redis), a API responde 202 com queued:true e o processamento
-  // segue em background — acompanhe via `get` (polling) até CONFIRMED/FAILED.
-  // Sem fila, vem queued:false com `imported` já preenchido.
-  confirm: (ws: string, id: string, owner: ImportOwner = {}) =>
+  // Confirma o lote num único request: envia todos os itens revisados de uma vez
+  // (substitui os N PATCH por item — fonte de tempestade de requisições em lotes
+  // grandes). A API grava o estado revisado em massa e enfileira no BullMQ.
+  // Quando há fila (Redis), responde 202 com queued:true e o processamento segue
+  // em background — acompanhe via `get` (polling) até CONFIRMED/FAILED. Sem fila,
+  // vem queued:false com `imported` já preenchido.
+  confirm: (ws: string, id: string, owner: ImportOwner = {}, items?: ReviewedImportItem[]) =>
     api.post<{ batch: ImportBatch; imported?: number; queued: boolean }>(
       wsPath(ws, `/imports/${id}/confirm`),
-      { defaultAccountId: owner.accountId, defaultCreditCardId: owner.creditCardId },
+      { defaultAccountId: owner.accountId, defaultCreditCardId: owner.creditCardId, items },
     ),
   remove: (ws: string, id: string) => api.del<void>(wsPath(ws, `/imports/${id}`)),
 };
