@@ -352,6 +352,20 @@ export function TransactionsPage() {
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(paged.visible.map((t) => t.key)));
 
+  // Total líquido das transações selecionadas (entradas somam, saídas subtraem;
+  // transferências são neutras). Exibido na barra de seleção em massa.
+  const selectedTotal = useMemo(() => {
+    const byKey = new Map(txs.map((t) => [t.key, t]));
+    let total = 0;
+    for (const key of selected) {
+      const t = byKey.get(key);
+      if (!t || t.type === 'TRANSFER') continue;
+      const amount = Math.abs(Number(t.amount));
+      total += t.type === 'INCOME' ? amount : -amount;
+    }
+    return total;
+  }, [selected, txs]);
+
   const openBulkTags = () => {
     if (selected.size === 0) return toast.error('Selecione ao menos uma transação');
     setBulkTagIds([]);
@@ -665,17 +679,17 @@ export function TransactionsPage() {
                     )}
                   </div>
                 </button>
-                {!selectMode && (
-                  <div className="flex items-center gap-1">
-                    <span
-                      className={cn(
-                        'whitespace-nowrap font-bold',
-                        transfer ? 'text-muted-foreground' : income ? 'text-success' : 'text-destructive',
-                      )}
-                    >
-                      {income ? '+' : transfer ? '' : '−'}
-                      {formatMoney(Math.abs(Number(t.amount)), hidden)}
-                    </span>
+                <div className="flex items-center gap-1">
+                  <span
+                    className={cn(
+                      'whitespace-nowrap font-bold',
+                      transfer ? 'text-muted-foreground' : income ? 'text-success' : 'text-destructive',
+                    )}
+                  >
+                    {income ? '+' : transfer ? '' : '−'}
+                    {formatMoney(Math.abs(Number(t.amount)), hidden)}
+                  </span>
+                  {!selectMode && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" aria-label="Ações">
@@ -734,8 +748,8 @@ export function TransactionsPage() {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </div>
-                )}
+                  )}
+                </div>
               </Card>
             );
           })}
@@ -756,6 +770,8 @@ export function TransactionsPage() {
       {selectMode && (
         <SelectionBar
           count={selected.size}
+          total={selectedTotal}
+          hidden={hidden}
           allSelected={allSelected}
           onToggleAll={toggleAll}
           onCancel={exitSelect}
