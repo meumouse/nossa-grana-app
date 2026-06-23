@@ -111,7 +111,7 @@ async function waitForImport(workspaceId: string, batchId: string): Promise<numb
  * Desiste após ~2min para não travar a UI caso o worker esteja indisponível.
  */
 async function waitForExtraction(workspaceId: string, batchId: string): Promise<ImportBatch> {
-  const maxAttempts = 80; // ~2min a 1,5s por tentativa
+  const maxAttempts = 200; // ~5min a 1,5s por tentativa (docs pesados demoram mais)
   for (let i = 0; i < maxAttempts; i++) {
     await sleep(1500);
     const { batch } = await importApi.get(workspaceId, batchId);
